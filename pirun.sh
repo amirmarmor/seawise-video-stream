@@ -1,6 +1,6 @@
 #!/bin/bash
 
-docker-compose -f redis.yaml down
+docker-compose down
 docker-compose -f redis.yaml -d up
 
 cd backend
