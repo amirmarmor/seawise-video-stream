@@ -27,14 +27,3 @@ services:
         - "8080:8080"
       depends_on:
         - redis
-    client:
-      container_name: client
-      build:
-        context: ./guifrontend
-      image: amirmarmor/seawise_client
-      environment:
-        - BACKEND_HOST=backend
-      ports:
-        - "3000:3000"
-      depends_on:
-        - backend
