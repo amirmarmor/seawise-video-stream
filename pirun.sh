@@ -2,7 +2,7 @@
 
 docker stop my-redis
 docker rm my-redis
-docker run --name my-redis -p "6379:6379" -v /data/redis:/data -d redis redis-server --appendonly yes
+docker run --name my-redis -p "6379:6379" -v ../data/redis:/data -d redis redis-server --appendonly yes
 
 cd backend
 kill -9 $(lsof -t -i:1323)
