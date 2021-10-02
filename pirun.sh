@@ -1,7 +1,7 @@
 #!/bin/bash
 
-docker-compose down
-docker-compose -f redis.yaml -d up
+docker-compose -f ./redis.yaml down
+docker-compose -f ./redis.yaml -d up
 
 cd backend
 kill -9 $(lsof -t -i:1323)
