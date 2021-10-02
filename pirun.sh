@@ -1,8 +1,7 @@
 #!/bin/bash
 
-docker stop my-redis
-docker rm my-redis
-docker run --name my-redis -p "6379:6379" -v ../data/redis:/data -d redis redis-server --appendonly yes
+docker-compose -f redis.yaml down
+docker-compose -f redis.yaml up
 
 cd backend
 kill -9 $(lsof -t -i:1323)
