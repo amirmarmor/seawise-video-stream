@@ -19,7 +19,6 @@ type Channel struct {
 	cap        *gocv.VideoCapture
 	image      gocv.Mat
 	writer     *gocv.VideoWriter
-	Show       bool
 	Record     bool
 	Recordings map[int64]*Recording
 	rules      []core.Rule
@@ -48,7 +47,9 @@ func (c *Channel) Init() error {
 	if err != nil {
 		return fmt.Errorf("Init failed to capture video %v: ", err)
 	}
-
+	vc.Set(gocv.VideoCaptureFPS, 1)
+	vc.Set(gocv.VideoCaptureFrameWidth, 1920)
+	vc.Set(gocv.VideoCaptureFrameHeight, 1080)
 	img := gocv.NewMat()
 
 	ok := vc.Read(&img)
@@ -99,17 +100,6 @@ func (c *Channel) close() error {
 func (c *Channel) Read() error {
 	imageRecord := c.checkImageRules()
 	videoRecord := c.checkVideoRules()
-	idle := !c.Show && !c.Record && !imageRecord && !videoRecord
-
-	if idle {
-		if c.init {
-			err := c.close()
-			if err != nil {
-				return fmt.Errorf("read failed to close: %v", err)
-			}
-		}
-		return nil
-	}
 
 	if !c.init {
 		err := c.Init()

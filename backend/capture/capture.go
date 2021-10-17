@@ -9,6 +9,7 @@ import (
 	"time"
 	"www.seawise.com/shrimps/backend/core"
 	"www.seawise.com/shrimps/backend/log"
+	"www.seawise.com/shrimps/backend/streamer"
 )
 
 type Capture struct {
@@ -20,6 +21,7 @@ type Capture struct {
 	Action      chan *ShowRecord
 	StopChannel chan string
 	Errors      chan error
+	stream  		*streamer.Streamer
 }
 
 type ShowRecord struct {
@@ -37,7 +39,17 @@ func Create(config *core.ConfigManager) *Capture {
 }
 
 func (c *Capture) Init() error {
-	return c.detectCameras()
+	err := c.detectCameras()
+	if err != nil {
+		return err
+	}
+
+	c.stream = streamer.Create()
+	for i := 0; i < len(c.Channels); i++ {
+		c.stream.Produce(i, c.Channels[i].Stream)
+	}
+	go c.stream.Start()
+	return nil
 }
 
 func (c *Capture) detectCameras() error {
@@ -124,9 +136,6 @@ func (c *Capture) restart(s string) error {
 }
 
 func (c *Capture) update(action *ShowRecord) error {
-	if action.Type == "show" {
-		c.Channels[action.Channel].Show = !c.Channels[action.Channel].Show
-	}
 	if action.Type == "record" {
 		c.Channels[action.Channel].Record = !c.Channels[action.Channel].Record
 	}
