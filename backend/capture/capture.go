@@ -1,6 +1,7 @@
 package capture
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -17,11 +18,12 @@ type Capture struct {
 	run         bool
 	manager     *core.ConfigManager
 	Channels    []*Channel
-	Recording   map[string]time.Time
 	Action      chan *ShowRecord
 	StopChannel chan string
 	Errors      chan error
-	stream  		*streamer.Streamer
+	stream      *streamer.Streamer
+	lastUpdate  time.Time
+	rules       []core.Rule
 }
 
 type ShowRecord struct {
@@ -35,13 +37,24 @@ func Create(config *core.ConfigManager) *Capture {
 		run:         true,
 		Action:      make(chan *ShowRecord, 0),
 		StopChannel: make(chan string, 0),
+		lastUpdate:  time.Now(),
 	}
 }
 
 func (c *Capture) Init() error {
-	err := c.detectCameras()
+	err := json.Unmarshal([]byte(c.manager.Config.Rules), &c.rules)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal rules: %v", err)
+	}
+
+	err = c.detectCameras()
 	if err != nil {
 		return err
+	}
+
+	err = c.manager.UpdateDeviceInfo(len(c.Channels))
+	if err != nil {
+		return fmt.Errorf("failed to update registration: %v", err)
 	}
 
 	c.stream = streamer.Create()
@@ -73,7 +86,7 @@ func (c *Capture) detectCameras() error {
 	c.Channels = make([]*Channel, 0)
 	for _, num := range vids {
 		if num >= c.manager.Config.Offset {
-			channel := CreateChannel(num, c.manager.Config.Rules)
+			channel := CreateChannel(num, c.rules, c.manager.Config.Fps)
 			err := channel.Init()
 			if err != nil {
 				continue
@@ -82,14 +95,13 @@ func (c *Capture) detectCameras() error {
 			}
 		}
 	}
+
 	return nil
 }
 
 func (c *Capture) Start() {
 	for c.run {
 		select {
-		case action := <-c.Action:
-			c.update(action)
 		case s := <-c.StopChannel:
 			c.stop(s)
 		default:
@@ -97,18 +109,6 @@ func (c *Capture) Start() {
 		}
 	}
 	c.StopChannel <- "restarting"
-}
-
-func (c *Capture) Update() {
-	c.StopChannel <- "stopping"
-	for !c.run {
-		select {
-		case s := <-c.StopChannel:
-			c.restart(s)
-		default:
-			continue
-		}
-	}
 }
 
 func (c *Capture) stop(s string) {
@@ -135,30 +135,24 @@ func (c *Capture) restart(s string) error {
 	return nil
 }
 
-func (c *Capture) update(action *ShowRecord) error {
-	if action.Type == "record" {
-		c.Channels[action.Channel].Record = !c.Channels[action.Channel].Record
-	}
-
-	if action.Type == "config" {
+func (c *Capture) capture() error {
+	now := time.Now()
+	if now.Sub(c.lastUpdate) > time.Second*10 {
 		err := c.manager.GetConfig()
-		for _, channel := range c.Channels {
-			channel.rules = c.manager.Config.Rules
-		}
 		if err != nil {
 			return err
 		}
+		c.lastUpdate = now
+
+		err = json.Unmarshal([]byte(c.manager.Config.Rules), &c.rules)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal rules: %v", err)
+		}
 	}
 
-	err := c.capture()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (c *Capture) capture() error {
 	for _, channel := range c.Channels {
+		channel.Record = c.manager.Config.RecordNow
+		channel.rules = c.rules
 		err := channel.Read()
 		if err != nil {
 			return fmt.Errorf("capture failed: %v", err)

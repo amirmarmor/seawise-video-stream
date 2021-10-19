@@ -24,6 +24,7 @@ type Channel struct {
 	rules      []core.Rule
 	path       string
 	Stream     *mjpeg.Stream
+	fps        int
 }
 
 type Recording struct {
@@ -31,13 +32,14 @@ type Recording struct {
 	startTime   time.Time
 }
 
-func CreateChannel(channel int, rules []core.Rule) *Channel {
+func CreateChannel(channel int, rules []core.Rule, fps int) *Channel {
 	return &Channel{
 		name:       channel,
 		Stream:     mjpeg.NewStream(),
 		rules:      rules,
 		Recordings: make(map[int64]*Recording),
 		created:    time.Now(),
+		fps:        fps,
 	}
 }
 
@@ -47,7 +49,8 @@ func (c *Channel) Init() error {
 	if err != nil {
 		return fmt.Errorf("Init failed to capture video %v: ", err)
 	}
-	vc.Set(gocv.VideoCaptureFPS, 1)
+	vc.Set(gocv.VideoCaptureFOURCC, vc.ToCodec("mjpg"))
+	vc.Set(gocv.VideoCaptureFPS, float64(c.fps))
 	vc.Set(gocv.VideoCaptureFrameWidth, 1920)
 	vc.Set(gocv.VideoCaptureFrameHeight, 1080)
 	img := gocv.NewMat()
@@ -64,7 +67,7 @@ func (c *Channel) Init() error {
 
 	saveFileName := path + "/" + now.Format("2006-01-02--15-04-05") + ".avi"
 
-	writer, err := gocv.VideoWriterFile(saveFileName, "MJPG", 25, img.Cols(), img.Rows(), true)
+	writer, err := gocv.VideoWriterFile(saveFileName, "MJPG", float64(c.fps), img.Cols(), img.Rows(), true)
 	if err != nil {
 		return fmt.Errorf("failed to create writer", err)
 	}
@@ -106,7 +109,6 @@ func (c *Channel) Read() error {
 		if err != nil {
 			return fmt.Errorf("read init failed to close: %v", err)
 		}
-
 	}
 
 	ok := c.cap.Read(&c.image)
@@ -127,14 +129,15 @@ func (c *Channel) Read() error {
 		}
 	}
 
-	if c.Record || videoRecord {
+	if videoRecord {
 		err := c.writer.Write(c.image)
 		if err != nil {
 			return fmt.Errorf("read failed to write: %v", err)
 		}
 	}
 
-	buffer, err := gocv.IMEncode(".jpg", c.image)
+	quality := 100
+	buffer, err := gocv.IMEncodeWithParams(".jpg", c.image, []int{gocv.IMWriteJpegQuality, quality})
 	if err != nil {
 		return fmt.Errorf("read failed to encode: %v", err)
 	}
@@ -218,6 +221,9 @@ func (c *Channel) checkImageRules() bool {
 
 func (c *Channel) checkVideoRules() bool {
 	now := time.Now()
+	if c.Record {
+		return true
+	}
 	for _, rule := range c.rules {
 
 		if rule.Type != "video" {

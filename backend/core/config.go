@@ -4,48 +4,48 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	externalip "github.com/glendc/go-external-ip"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os/exec"
 	"strconv"
 	"strings"
 	"www.seawise.com/shrimps/backend/exposed"
+	"www.seawise.com/shrimps/backend/log"
 )
 
-type RegisterRequest struct {
-	Sn    string `json:"sn"`
-	Ip    string `json:"ip"`
-	Owner string `json:"owner"`
+type DeviceInfo struct {
+	Sn       string `json:"sn"`
+	Owner    string `json:"owner"`
+	Id       int    `json:"id,string"`
+	Ip       string `json:"ip"`
+	Channels int    `json:"channels,string"`
 }
 
 type RegisterResponse struct {
-	RegistrationId string `json:"registration_id"`
+	RegistrationId int `json:"id,string"`
 }
 
-type GetConfigResponse struct {
-	Ip      string `json:"ip"`
-	Offset  int    `json:"offset,string"`
-	Cleanup string `json:"cleanup"`
-	Fps     int    `json:"fps,string"`
-	Rules   string `json:"rules"`
+type MessageResponse struct {
+	Msg string `json:"msg"`
 }
 
 type Configuration struct {
-	Offset  int
-	Cleanup bool
-	Fps     int
-	Rules   []Rule `json:"rules"`
+	Id        int    `json:"id,string"`
+	Offset    int    `json:"offset,string"`
+	Cleanup   bool   `json:"cleanup"`
+	Fps       int    `json:"fps,string"`
+	RecordNow bool   `json:"record"`
+	Rules     string `json:"rules"`
 }
 
 type ConfigManager struct {
-	Info   *RegisterRequest
-	Id     string
+	Info   *DeviceInfo
 	Config *Configuration
 }
 
 type Rule struct {
-	Id        int64  `json:"id,string"`
+	Id        int64  `json:"id"`
 	Recurring string `json:"recurring"`
 	Start     int64  `json:"start,string"`
 	Duration  int64  `json:"duration,string"`
@@ -56,6 +56,7 @@ func Produce() (*ConfigManager, error) {
 	InitFlags()
 
 	manager := ConfigManager{}
+
 	err := manager.Register()
 	if err != nil {
 		return nil, err
@@ -70,42 +71,91 @@ func Produce() (*ConfigManager, error) {
 }
 
 func (cm *ConfigManager) GetConfig() error {
-	resp, err := http.Get(exposed.ApiUrl + "/device/" + cm.Id)
+	cm.Config = &Configuration{
+		Offset: 0,
+		Id:     cm.Info.Id,
+	}
+
+	resp, err := http.Get(exposed.ApiUrl + "/device/" + strconv.Itoa(cm.Info.Id))
 	if err != nil {
 		return err
+	}
+
+	if resp.StatusCode == 200 {
+		var body []byte
+		body, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+
+		err = json.Unmarshal(body, cm.Config)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal: %v", err)
+		}
+	} else {
+		err = cm.SetConfig()
+		if err != nil {
+			return fmt.Errorf("failed to set default config: %v", err)
+		}
 	}
 
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	return nil
+}
+
+func (cm *ConfigManager) SetConfig() error {
+
+	cm.Config.RecordNow = false
+	cm.Config.Cleanup = true
+	cm.Config.Fps = 30
+	cm.Config.Rules = "[]"
+
+	postBody, err := json.Marshal(cm.Config)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal - set config: %v", err)
 	}
 
-	response := &GetConfigResponse{}
+	body, err := cm.post(exposed.ApiUrl+"/device", postBody)
+	if err != nil {
+		return fmt.Errorf("failed to update config: %v", err)
+	}
 
+	response := &MessageResponse{}
 	err = json.Unmarshal(body, response)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal: %v", err)
+		return fmt.Errorf("failed to update config: %v", err)
 	}
 
-	config := &Configuration{}
+	log.V5(response.Msg)
+	return nil
+}
 
-	config.Offset = response.Offset
-	config.Fps = response.Fps
-
-	config.Cleanup, err = strconv.ParseBool(response.Cleanup)
+func (cm *ConfigManager) UpdateDeviceInfo(channels int) error {
+	ip, err := cm.getIp()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to update registration: %v", err)
 	}
 
-	config.Rules = make([]Rule, 0)
-	err = json.Unmarshal([]byte(response.Rules), &config.Rules)
+	cm.Info.Channels = channels
+	cm.Info.Ip = ip
+
+	postBody, err := json.Marshal(cm.Info)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal register requets: %v", err)
 	}
 
-	cm.Config = config
+	body, err := cm.post(exposed.ApiUrl+"/registration/update", postBody)
+	if err != nil {
+		return fmt.Errorf("failed to update registration: %v", err)
+	}
 
+	response := &MessageResponse{}
+	err = json.Unmarshal(body, response)
+	if err != nil {
+		return fmt.Errorf("failed to update registration: %v", err)
+	}
+
+	log.V5(response.Msg)
 	return nil
 }
 
@@ -116,7 +166,7 @@ func (cm *ConfigManager) Register() error {
 		return fmt.Errorf("failed to register: %v", err)
 	}
 
-	cm.Info = &RegisterRequest{
+	cm.Info = &DeviceInfo{
 		Sn:    sn,
 		Ip:    ip,
 		Owner: "echo",
@@ -127,14 +177,7 @@ func (cm *ConfigManager) Register() error {
 		return fmt.Errorf("failed to marshal register requets: %v", err)
 	}
 
-	respBody := bytes.NewBuffer(postBody)
-	resp, err := http.Post(exposed.ApiUrl+"/register", "application/json", respBody)
-	if err != nil {
-		return fmt.Errorf("failed to register: %v", err)
-	}
-
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := cm.post(exposed.ApiUrl+"/register", postBody)
 	if err != nil {
 		return fmt.Errorf("failed to register: %v", err)
 	}
@@ -145,8 +188,25 @@ func (cm *ConfigManager) Register() error {
 		return fmt.Errorf("failed to unmarshal register response: %v", err)
 	}
 
-	cm.Id = response.RegistrationId
+	cm.Info.Id = response.RegistrationId
+
 	return nil
+}
+
+func (cm *ConfigManager) post(url string, postBody []byte) ([]byte, error) {
+	respBody := bytes.NewBuffer(postBody)
+	resp, err := http.Post(url, "application/json", respBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to post: %v", err)
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to post: %v", err)
+	}
+
+	return body, nil
 }
 
 func (cm *ConfigManager) getSN() string {
@@ -156,10 +216,13 @@ func (cm *ConfigManager) getSN() string {
 }
 
 func (cm *ConfigManager) getIp() (string, error) {
-	consensus := externalip.DefaultConsensus(nil, nil)
-	ip, err := consensus.ExternalIP()
+	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
-		return "", fmt.Errorf("failed to get ip: %v", err)
+		return "",fmt.Errorf("failed to get IP: %v", err)
 	}
-	return ip.String(), nil
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+	return localAddr.IP.String(), nil
 }

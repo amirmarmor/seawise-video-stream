@@ -76,6 +76,6 @@ func NewStream() *Stream {
 	return &Stream{
 		m:             make(map[chan []byte]bool),
 		frame:         make([]byte, len(headerf)),
-		FrameInterval: 50 * time.Millisecond,
+		FrameInterval: 30 * time.Millisecond,
 	}
 }
