@@ -12,4 +12,3 @@ $cmd &
 
 now=$(date +"%T")
 echo "[$now] Running"
-

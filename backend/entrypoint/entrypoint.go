@@ -8,9 +8,9 @@ import (
 )
 
 type EntryPoint struct {
-	manager *core.ConfigManager
-	capt    *capture.Capture
-	stream  *streamer.Streamer
+	manager  *core.ConfigManager
+	capt     *capture.Capture
+	streamer *streamer.Streamer
 }
 
 func (p *EntryPoint) Run() {
@@ -19,9 +19,18 @@ func (p *EntryPoint) Run() {
 	log.Info("Starting")
 
 	p.buildBlocks()
+
 	cleanSigTerm := Produce()
-	//
-	cleanSigTerm.WaitForTermination()
+	go p.capt.Start()
+
+	err := p.streamer.Server.ListenAndServe()
+	if err != nil {
+		log.Error("FAILED TO START SERVER", err)
+	}
+
+	p.streamer.Stop(p.capt)
+
+	cleanSigTerm.WaitForTermination(*p.streamer)
 }
 
 func (p *EntryPoint) buildBlocks() {
@@ -33,6 +42,6 @@ func (p *EntryPoint) buildBlocks() {
 
 	p.capt = capture.Create(p.manager)
 	p.capt.Init()
-	go p.capt.Start()
-}
 
+	p.streamer = streamer.Create(p.capt)
+}

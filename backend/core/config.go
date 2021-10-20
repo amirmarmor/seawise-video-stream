@@ -47,7 +47,7 @@ type ConfigManager struct {
 type Rule struct {
 	Id        int64  `json:"id"`
 	Recurring string `json:"recurring"`
-	Start     int64  `json:"start,string"`
+	Start     int64  `json:"start"`
 	Duration  int64  `json:"duration,string"`
 	Type      string `json:"type"`
 }
@@ -110,23 +110,6 @@ func (cm *ConfigManager) SetConfig() error {
 	cm.Config.Fps = 30
 	cm.Config.Rules = "[]"
 
-	postBody, err := json.Marshal(cm.Config)
-	if err != nil {
-		return fmt.Errorf("failed to marshal - set config: %v", err)
-	}
-
-	body, err := cm.post(exposed.ApiUrl+"/device", postBody)
-	if err != nil {
-		return fmt.Errorf("failed to update config: %v", err)
-	}
-
-	response := &MessageResponse{}
-	err = json.Unmarshal(body, response)
-	if err != nil {
-		return fmt.Errorf("failed to update config: %v", err)
-	}
-
-	log.V5(response.Msg)
 	return nil
 }
 

@@ -2,46 +2,37 @@ package streamer
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strconv"
-	"www.seawise.com/shrimps/backend/mjpeg"
+	"www.seawise.com/shrimps/backend/capture"
 )
 
 type Streamer struct {
-	server *http.Server
-	client *http.ServeMux
+	Server *http.Server
+	Ctx    *context.Context
+	Cancel context.CancelFunc
 }
 
-func Create() *Streamer {
-	c := http.NewServeMux()
-	s := &http.Server{
-		Addr:    ":8080",
-		Handler: c,
+func Create(capture *capture.Capture) *Streamer {
+	for i := 0; i < len(capture.Channels); i++ {
+		path := "/stream/" + strconv.Itoa(i)
+		http.HandleFunc(path, capture.Channels[i].Stream.ServeHTTP)
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
 	return &Streamer{
-		client: c,
-		server: s,
+		Server: &http.Server{
+			Addr: ":8080",
+		},
+		Ctx:    &ctx,
+		Cancel: cancel,
 	}
 }
 
-func (s *Streamer) Produce(channel int, stream *mjpeg.Stream) {
-	path := "/stream/" + strconv.Itoa(channel)
-	s.client.Handle(path, stream)
-}
-
-func (s *Streamer) Start() {
-	err := s.server.ListenAndServe()
-	if err != nil {
-		panic(err)
+func (s *Streamer) Stop(capture *capture.Capture) {
+	for _, channel := range capture.Channels {
+		channel.Stream.Close()
 	}
-}
-
-func (s *Streamer) Stop() error {
-	ctx := context.Background()
-	err := s.server.Shutdown(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to stop stream server: %v", err)
-	}
-	return nil
+	s.Cancel()
 }

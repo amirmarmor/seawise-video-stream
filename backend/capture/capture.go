@@ -10,7 +10,6 @@ import (
 	"time"
 	"www.seawise.com/shrimps/backend/core"
 	"www.seawise.com/shrimps/backend/log"
-	"www.seawise.com/shrimps/backend/streamer"
 )
 
 type Capture struct {
@@ -21,7 +20,6 @@ type Capture struct {
 	Action      chan *ShowRecord
 	StopChannel chan string
 	Errors      chan error
-	stream      *streamer.Streamer
 	lastUpdate  time.Time
 	rules       []core.Rule
 }
@@ -57,11 +55,6 @@ func (c *Capture) Init() error {
 		return fmt.Errorf("failed to update registration: %v", err)
 	}
 
-	c.stream = streamer.Create()
-	for i := 0; i < len(c.Channels); i++ {
-		c.stream.Produce(i, c.Channels[i].Stream)
-	}
-	go c.stream.Start()
 	return nil
 }
 
@@ -116,8 +109,8 @@ func (c *Capture) stop(s string) {
 	c.run = false
 }
 
-func (c *Capture) restart(s string) error {
-	log.V5(fmt.Sprintf("capture - %s", s))
+func (c *Capture) restart() error {
+	log.V5(fmt.Sprintf("restarting"))
 	c.run = true
 
 	for i := 0; i < len(c.Channels); i++ {
@@ -159,4 +152,5 @@ func (c *Capture) capture() error {
 		}
 	}
 	return nil
+
 }
