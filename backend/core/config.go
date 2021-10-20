@@ -17,13 +17,13 @@ import (
 type DeviceInfo struct {
 	Sn       string `json:"sn"`
 	Owner    string `json:"owner"`
-	Id       int    `json:"id,string"`
+	Id       int    `json:"id"`
 	Ip       string `json:"ip"`
-	Channels int    `json:"channels,string"`
+	Channels int    `json:"channels"`
 }
 
 type RegisterResponse struct {
-	RegistrationId int `json:"id,string"`
+	RegistrationId int `json:"id"`
 }
 
 type MessageResponse struct {
@@ -31,10 +31,10 @@ type MessageResponse struct {
 }
 
 type Configuration struct {
-	Id        int    `json:"id,string"`
-	Offset    int    `json:"offset,string"`
+	Id        int    `json:"id"`
+	Offset    int    `json:"offset"`
 	Cleanup   bool   `json:"cleanup"`
-	Fps       int    `json:"fps,string"`
+	Fps       int    `json:"fps"`
 	RecordNow bool   `json:"record"`
 	Rules     string `json:"rules"`
 }
@@ -47,7 +47,7 @@ type ConfigManager struct {
 type Rule struct {
 	Id        int64  `json:"id"`
 	Recurring string `json:"recurring"`
-	Start     int64  `json:"start"`
+	Start     int64  `json:"start,string"`
 	Duration  int64  `json:"duration,string"`
 	Type      string `json:"type"`
 }
