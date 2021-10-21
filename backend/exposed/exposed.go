@@ -1,4 +1,5 @@
 package exposed
 
-const ApiUrl = "http://127.0.0.1:5000/api"
+const ApiUrl = "http://localhost:5000/api" //"http:// 3.239.51.213:5000/api"
+
 
