@@ -143,11 +143,11 @@ func (cm *ConfigManager) UpdateDeviceInfo(channels int) error {
 }
 
 func (cm *ConfigManager) Register() error {
-	sn := cm.getSN()
 	ip, err := cm.getIp()
 	if err != nil {
 		return fmt.Errorf("failed to register: %v", err)
 	}
+	sn := cm.getSN()
 
 	cm.Info = &DeviceInfo{
 		Sn:    sn,
