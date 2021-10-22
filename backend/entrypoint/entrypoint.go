@@ -14,7 +14,9 @@ type EntryPoint struct {
 }
 
 func (p *EntryPoint) Run() {
+	core.InitFlags()
 	log.InitFlags()
+
 	log.ParseFlags()
 	log.Info("Starting")
 

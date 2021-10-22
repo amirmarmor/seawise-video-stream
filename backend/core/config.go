@@ -8,9 +8,9 @@ import (
 	"net"
 	"net/http"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
-	"www.seawise.com/shrimps/backend/exposed"
 	"www.seawise.com/shrimps/backend/log"
 )
 
@@ -53,9 +53,9 @@ type Rule struct {
 }
 
 func Produce() (*ConfigManager, error) {
-	InitFlags()
-
 	manager := ConfigManager{}
+
+	log.V5("REGISTERING DEVICE - " + Api.Host)
 
 	err := manager.Register()
 	if err != nil {
@@ -76,7 +76,7 @@ func (cm *ConfigManager) GetConfig() error {
 		Id:     cm.Info.Id,
 	}
 
-	resp, err := http.Get(exposed.ApiUrl + "/device/" + strconv.Itoa(cm.Info.Id))
+	resp, err := http.Get("http://" + Api.Host + "/api/device/" + strconv.Itoa(cm.Info.Id))
 	if err != nil {
 		return err
 	}
@@ -127,7 +127,7 @@ func (cm *ConfigManager) UpdateDeviceInfo(channels int) error {
 		return fmt.Errorf("failed to marshal register requets: %v", err)
 	}
 
-	body, err := cm.post(exposed.ApiUrl+"/registration/update", postBody)
+	body, err := cm.post("http://" + Api.Host+"/api/registration/update", postBody)
 	if err != nil {
 		return fmt.Errorf("failed to update registration: %v", err)
 	}
@@ -160,7 +160,9 @@ func (cm *ConfigManager) Register() error {
 		return fmt.Errorf("failed to marshal register requets: %v", err)
 	}
 
-	body, err := cm.post(exposed.ApiUrl+"/register", postBody)
+	apiUrl := "http://"+ Api.Host+"/api/register"
+	log.V5(apiUrl)
+	body, err := cm.post(apiUrl, postBody)
 	if err != nil {
 		return fmt.Errorf("failed to register: %v", err)
 	}
@@ -193,12 +195,33 @@ func (cm *ConfigManager) post(url string, postBody []byte) ([]byte, error) {
 }
 
 func (cm *ConfigManager) getSN() string {
-	out, _ := exec.Command("/bin/sh", "-c", "sudo cat /sys/class/dmi/id/board_serial").Output()
+	log.V5("GETTING SERIAL NUMBER")
+	var out []byte
+	out, err := exec.Command("/bin/sh", "-c", "sudo cat /sys/class/dmi/id/board_serial").Output()
+	if err != nil {
+		log.V5("NOT UBUNTU")
+		log.Error("failed to get regular sn %v:", err)
+		out, err = cm.getPiSn()
+		if err != nil {
+			log.Error("Failed to get PI SN: %v", err)
+		}
+	}
 	sn := strings.ReplaceAll(string(out), "\n", "")
 	return sn
 }
 
+func (cm *ConfigManager) getPiSn() ([]byte, error) {
+	log.V5("GTTING PI S/N")
+	out, err := exec.Command("/bin/sh", "-c", "sudo cat /proc/cpuinfo").Output()
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (cm *ConfigManager) getIp() (string, error) {
+	log.V5(runtime.GOOS)
+	log.V5("GETTING IP")
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
 		return "",fmt.Errorf("failed to get IP: %v", err)
