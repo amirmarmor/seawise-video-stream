@@ -220,7 +220,7 @@ func (cm *ConfigManager) getPiSn() ([]byte, error) {
 }
 
 func (cm *ConfigManager) getIp() (string, error) {
-	log.V5(runtime.GOOS)
+	fmt.Println(runtime.GOOS)
 	log.V5("GETTING IP")
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
