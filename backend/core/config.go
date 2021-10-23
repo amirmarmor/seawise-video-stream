@@ -204,6 +204,7 @@ func (cm *ConfigManager) post(url string, postBody []byte) ([]byte, error) {
 }
 
 func (cm *ConfigManager) getPlatform() error {
+	log.V5("HERE")
 	out, err := exec.Command("/bin/sh", "-c", "uname -m").Output()
 	if err != nil {
 		return fmt.Errorf("failed to identify platform: %v", err)
@@ -214,6 +215,7 @@ func (cm *ConfigManager) getPlatform() error {
 	} else {
 		cm.Platform = "other"
 	}
+	log.V5("MY PLATFORM IS", cm.Platform)
 	return nil
 }
 
