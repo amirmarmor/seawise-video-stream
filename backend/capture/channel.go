@@ -146,7 +146,7 @@ func (c *Channel) Read() error {
 
 	c.Stream.UpdateJPEG(buffer.GetBytes())
 
-	//buffer.Close()
+	buffer.Close()
 
 	return nil
 }
