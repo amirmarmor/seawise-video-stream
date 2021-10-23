@@ -119,6 +119,7 @@ func (c *Channel) Read() (*gocv.NativeByteBuffer, error) {
 
 	if videoRecord {
 		if !c.Recording {
+			log.V5("START RECORD")
 			c.Recording = true
 			now := time.Now()
 			path, err := c.createSavePath()
@@ -138,22 +139,27 @@ func (c *Channel) Read() (*gocv.NativeByteBuffer, error) {
 		if err != nil {
 			return nil, fmt.Errorf("read failed to write: %v", err)
 		}
+
+		return nil, nil
 	} else {
+		if(c.Recording){
+			log.V5("STOP RECORD")
+		}
 		c.Recording = false
+		quality := 50
+		buffer, err := gocv.IMEncodeWithParams(".jpg", c.image, []int{gocv.IMWriteJpegQuality, quality})
+		if err != nil {
+			return nil, fmt.Errorf("read failed to encode: %v", err)
+		}
+
+		err = c.Stream.Update(buffer.GetBytes())
+		if err != nil {
+			return nil, fmt.Errorf("failed to update stream in read: %v", err)
+		}
+
+		return buffer, nil
 	}
 
-	quality := 50
-	buffer, err := gocv.IMEncodeWithParams(".jpg", c.image, []int{gocv.IMWriteJpegQuality, quality})
-	if err != nil {
-		return nil, fmt.Errorf("read failed to encode: %v", err)
-	}
-
-	err = c.Stream.Update(buffer.GetBytes())
-	if err != nil {
-		return nil, fmt.Errorf("failed to update stream in read: %v", err)
-	}
-
-	return buffer, nil
 }
 
 func (c *Channel) createSavePath() (string, error) {

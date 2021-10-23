@@ -153,7 +153,10 @@ func (c *Capture) capture() error {
 		if err != nil {
 			return fmt.Errorf("capture failed: %v", err)
 		}
-		buf.Close()
+
+		if buf != nil {
+			buf.Close()
+		}
 	}
 	return nil
 
