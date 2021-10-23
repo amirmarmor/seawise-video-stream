@@ -4,7 +4,7 @@ import (
 	"www.seawise.com/backend/capture"
 	"www.seawise.com/backend/core"
 	"www.seawise.com/backend/log"
-	"www.seawise.com//backend/streamer"
+	"www.seawise.com/backend/streamer"
 )
 
 type EntryPoint struct {

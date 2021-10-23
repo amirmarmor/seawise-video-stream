@@ -27,6 +27,7 @@ type Channel struct {
 	path       string
 	Stream     *mjpeg.Stream
 	fps        int
+	Buffer     []byte
 }
 
 type Recording struct {
@@ -102,24 +103,24 @@ func (c *Channel) close() error {
 	return nil
 }
 
-func (c *Channel) Read() error {
+func (c *Channel) Read() (*gocv.NativeByteBuffer, error) {
 	imageRecord := c.checkImageRules()
 	videoRecord := c.checkVideoRules()
 
 	if !c.init {
 		err := c.Init()
 		if err != nil {
-			return fmt.Errorf("read init failed to close: %v", err)
+			return nil, fmt.Errorf("read init failed to close: %v", err)
 		}
 	}
 
 	ok := c.cap.Read(&c.image)
 	if !ok {
-		return fmt.Errorf("read encountered channel closed %v\n", c.name)
+		return nil, fmt.Errorf("read encountered channel closed %v\n", c.name)
 	}
 
 	if c.image.Empty() {
-		return nil
+		return nil, nil
 	}
 
 	if imageRecord {
@@ -127,31 +128,29 @@ func (c *Channel) Read() error {
 		saveFileName := c.path + "/" + now.Format("2006-01-02--15-04-05") + "-image.jpg"
 		ok := gocv.IMWrite(saveFileName, c.image)
 		if !ok {
-			return fmt.Errorf("read failed to write image")
+			return nil, fmt.Errorf("read failed to write image")
 		}
 	}
 
 	if videoRecord {
 		err := c.writer.Write(c.image)
 		if err != nil {
-			return fmt.Errorf("read failed to write: %v", err)
+			return nil, fmt.Errorf("read failed to write: %v", err)
 		}
 	}
 
-	quality := 100
+	quality := 50
 	buffer, err := gocv.IMEncodeWithParams(".jpg", c.image, []int{gocv.IMWriteJpegQuality, quality})
 	if err != nil {
-		return fmt.Errorf("read failed to encode: %v", err)
+		return nil, fmt.Errorf("read failed to encode: %v", err)
 	}
 
 	err = c.Stream.Update(buffer.GetBytes())
 	if err != nil {
-		return fmt.Errorf("failed to update stream in read: %v", err)
+		return nil, fmt.Errorf("failed to update stream in read: %v", err)
 	}
 
-	buffer.Close()
-
-	return nil
+	return buffer, nil
 }
 
 func (c *Channel) createSavePath() (string, error) {
