@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"www.seawise.com/shrimps/backend/log"
+	"www.seawise.com/backend/log"
 )
 
 type DeviceInfo struct {

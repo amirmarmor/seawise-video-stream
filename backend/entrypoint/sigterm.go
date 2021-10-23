@@ -4,8 +4,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"www.seawise.com/shrimps/backend/log"
-	"www.seawise.com/shrimps/backend/streamer"
+	"www.seawise.com/backend/log"
+	"www.seawise.com/backend/streamer"
 )
 
 type Cleanup func()

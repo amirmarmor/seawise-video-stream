@@ -7,8 +7,8 @@ import (
 	"os"
 	"reflect"
 	"time"
-	"www.seawise.com/shrimps/backend/core"
-	"www.seawise.com/shrimps/backend/log"
+	"www.seawise.com/backend/core"
+	"www.seawise.com/backend/log"
 )
 
 const interval = 50 * time.Millisecond

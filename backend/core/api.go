@@ -3,7 +3,7 @@ package core
 import (
 	"encoding/json"
 	"github.com/namsral/flag"
-	"www.seawise.com/shrimps/backend/log"
+	"www.seawise.com/backend/log"
 )
 
 type ApiInfo = struct {

@@ -4,7 +4,8 @@ import (
 	"context"
 	"net/http"
 	"strconv"
-	"www.seawise.com/shrimps/backend/capture"
+	"www.seawise.com/backend/capture"
+	"www.seawise.com/backend/log"
 )
 
 type Streamer struct {
@@ -16,6 +17,7 @@ type Streamer struct {
 func Create(capture *capture.Capture) *Streamer {
 	for i := 0; i < len(capture.Channels); i++ {
 		path := "/stream/" + strconv.Itoa(i)
+		log.V5("here")
 		http.HandleFunc(path, capture.Channels[i].Stream.ServeHTTP)
 	}
 
