@@ -2,4 +2,3 @@
 node_modules
 /backend/go1.16.8.linux-armv6l.tar.gz
 videos
-streamer
