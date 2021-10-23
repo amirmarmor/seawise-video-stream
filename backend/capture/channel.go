@@ -2,13 +2,13 @@ package capture
 
 import (
 	"fmt"
-	"github.com/mattn/go-mjpeg"
 	"gocv.io/x/gocv"
 	"os"
 	"reflect"
 	"time"
 	"www.seawise.com/shrimps/backend/core"
 	"www.seawise.com/shrimps/backend/log"
+	"www.seawise.com/shrimps/backend/mjpeg"
 )
 
 const interval = 50 * time.Millisecond
@@ -37,7 +37,7 @@ type Recording struct {
 func CreateChannel(channel int, rules []core.Rule, fps int) *Channel {
 	return &Channel{
 		name:       channel,
-		Stream:     mjpeg.NewStreamWithInterval(interval),
+		Stream:     mjpeg.NewStream(),
 		rules:      rules,
 		Recordings: make(map[int64]*Recording),
 		created:    time.Now(),
@@ -144,10 +144,7 @@ func (c *Channel) Read() error {
 		return fmt.Errorf("read failed to encode: %v", err)
 	}
 
-	err = c.Stream.Update(buffer.GetBytes())
-	if err != nil {
-		return fmt.Errorf("failed to update stream in read: %v", err)
-	}
+	c.Stream.UpdateJPEG(buffer.GetBytes())
 
 	buffer.Close()
 

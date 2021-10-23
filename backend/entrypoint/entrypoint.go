@@ -25,14 +25,9 @@ func (p *EntryPoint) Run() {
 	cleanSigTerm := Produce()
 	go p.capt.Start()
 
-	err := p.streamer.Server.ListenAndServe()
-	if err != nil {
-		log.Error("FAILED TO START SERVER", err)
-	}
-
-	p.streamer.Stop(p.capt)
-
-	cleanSigTerm.WaitForTermination(*p.streamer)
+	p.streamer.Produce()
+	p.streamer.Start()
+	cleanSigTerm.WaitForTermination()
 }
 
 func (p *EntryPoint) buildBlocks() {
