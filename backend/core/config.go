@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"os/exec"
-	"runtime"
 	"strconv"
 	"strings"
 	"www.seawise.com/shrimps/backend/log"
@@ -40,8 +39,9 @@ type Configuration struct {
 }
 
 type ConfigManager struct {
-	Info   *DeviceInfo
-	Config *Configuration
+	Info     *DeviceInfo
+	Config   *Configuration
+	Platform string
 }
 
 type Rule struct {
@@ -127,7 +127,7 @@ func (cm *ConfigManager) UpdateDeviceInfo(channels int) error {
 		return fmt.Errorf("failed to marshal register requets: %v", err)
 	}
 
-	body, err := cm.post("http://" + Api.Host+"/api/registration/update", postBody)
+	body, err := cm.post("http://"+Api.Host+"/api/registration/update", postBody)
 	if err != nil {
 		return fmt.Errorf("failed to update registration: %v", err)
 	}
@@ -143,11 +143,20 @@ func (cm *ConfigManager) UpdateDeviceInfo(channels int) error {
 }
 
 func (cm *ConfigManager) Register() error {
+	err := cm.getPlatform()
+	if err != nil {
+		return fmt.Errorf("failed to register: %v", err)
+	}
+
 	ip, err := cm.getIp()
 	if err != nil {
 		return fmt.Errorf("failed to register: %v", err)
 	}
-	sn := cm.getSN()
+
+	sn, err := cm.getSN()
+	if err != nil {
+		return fmt.Errorf("failed to register: %v", err)
+	}
 
 	cm.Info = &DeviceInfo{
 		Sn:    sn,
@@ -160,7 +169,7 @@ func (cm *ConfigManager) Register() error {
 		return fmt.Errorf("failed to marshal register requets: %v", err)
 	}
 
-	apiUrl := "http://"+ Api.Host+"/api/register"
+	apiUrl := "http://" + Api.Host + "/api/register"
 	log.V5(apiUrl)
 	body, err := cm.post(apiUrl, postBody)
 	if err != nil {
@@ -194,37 +203,45 @@ func (cm *ConfigManager) post(url string, postBody []byte) ([]byte, error) {
 	return body, nil
 }
 
-func (cm *ConfigManager) getSN() string {
-	log.V5("GETTING SERIAL NUMBER")
-	var out []byte
-	out, err := exec.Command("/bin/sh", "-c", "sudo cat /sys/class/dmi/id/board_serial").Output()
+func (cm *ConfigManager) getPlatform() error {
+	out, err := exec.Command("/bin/sh", "-c", "uname -m").Output()
 	if err != nil {
-		log.V5("NOT UBUNTU")
-		log.Error("failed to get regular sn %v:", err)
-		out, err = cm.getPiSn()
-		if err != nil {
-			log.Error("Failed to get PI SN: %v", err)
-		}
+		return fmt.Errorf("failed to identify platform: %v", err)
 	}
-	sn := strings.ReplaceAll(string(out), "\n", "")
-	return sn
+	platform := strings.ReplaceAll(string(out), "\n", "")
+	if strings.Contains(platform, "arm"){
+		cm.Platform = "pi"
+	} else {
+		cm.Platform = "other"
+	}
+	return nil
 }
 
-func (cm *ConfigManager) getPiSn() ([]byte, error) {
-	log.V5("GTTING PI S/N")
-	out, err := exec.Command("/bin/sh", "-c", "sudo cat /proc/cpuinfo").Output()
-	if err != nil {
-		return nil, err
+
+func (cm *ConfigManager) getSN() (string, error) {
+	log.V5("GETTING SERIAL NUMBER")
+	var out *exec.Cmd
+	if cm.Platform == "pi" {
+		out = exec.Command("/bin/sh", "-c", "sudo cat /proc/cpuinfo")
+	} else {
+		out = exec.Command("/bin/sh", "-c", "sudo cat /sys/class/dmi/id/board_serial")
 	}
-	return out, nil
+	res, err := out.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get S/N: %v", err)
+	}
+
+	sn := strings.ReplaceAll(string(res), "\n", "")
+	return sn, nil
 }
 
 func (cm *ConfigManager) getIp() (string, error) {
-	fmt.Println(runtime.GOOS)
-	log.V5("GETTING IP")
+	if cm.Platform != "pi" {
+		return "127.0.0.1", nil
+	}
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
-		return "",fmt.Errorf("failed to get IP: %v", err)
+		return "", fmt.Errorf("failed to get IP: %v", err)
 	}
 	defer conn.Close()
 
