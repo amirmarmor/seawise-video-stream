@@ -14,20 +14,20 @@ import (
 const interval = 50 * time.Millisecond
 
 type Channel struct {
-	created    time.Time
-	cleanup    bool
-	name       int
-	init       bool
-	cap        *gocv.VideoCapture
-	image      gocv.Mat
-	writer     *gocv.VideoWriter
-	Record     bool
-	Recordings map[int64]*Recording
-	rules      []core.Rule
-	path       string
-	Stream     *mjpeg.Stream
-	fps        int
-	Buffer     []byte
+	created   time.Time
+	cleanup   bool
+	name      int
+	init      bool
+	cap       *gocv.VideoCapture
+	image     gocv.Mat
+	writer    *gocv.VideoWriter
+	Record    bool
+	Recording bool
+	rules     []core.Rule
+	path      string
+	Stream    *mjpeg.Stream
+	fps       int
+	Buffer    []byte
 }
 
 type Recording struct {
@@ -47,7 +47,6 @@ func CreateChannel(channel int, rules []core.Rule, fps int) *Channel {
 }
 
 func (c *Channel) Init() error {
-	now := time.Now()
 	vc, err := gocv.OpenVideoCapture(c.name)
 	if err != nil {
 		return fmt.Errorf("Init failed to capture video %v: ", err)
@@ -63,23 +62,9 @@ func (c *Channel) Init() error {
 		return fmt.Errorf("Init failed to read")
 	}
 
-	path, err := c.createSavePath()
-	if err != nil {
-		return fmt.Errorf("failed to create path: %v", err)
-	}
-
-	saveFileName := path + "/" + now.Format("2006-01-02--15-04-05") + ".avi"
-
-	writer, err := gocv.VideoWriterFile(saveFileName, "MJPG", float64(c.fps), img.Cols(), img.Rows(), true)
-	if err != nil {
-		return fmt.Errorf("failed to create writer", err)
-	}
-
 	c.cap = vc
 	c.image = img
-	c.writer = writer
 	c.init = true
-	c.path = path
 
 	return nil
 }
@@ -133,10 +118,28 @@ func (c *Channel) Read() (*gocv.NativeByteBuffer, error) {
 	}
 
 	if videoRecord {
+		if (!c.Recording) {
+			c.Recording = true
+			now := time.Now()
+			path, err := c.createSavePath()
+			if err != nil {
+				return nil, fmt.Errorf("failed to create path: %v", err)
+			}
+
+			saveFileName := path + "/" + now.Format("2006-01-02--15-04-05") + ".avi"
+
+			c.writer, err = gocv.VideoWriterFile(saveFileName, "MJPG", float64(c.fps), c.image.Cols(), c.image.Rows(), true)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create writer", err)
+			}
+		}
+
 		err := c.writer.Write(c.image)
 		if err != nil {
 			return nil, fmt.Errorf("read failed to write: %v", err)
 		}
+	} else {
+		c.Recording = false
 	}
 
 	quality := 50
