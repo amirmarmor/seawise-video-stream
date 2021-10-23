@@ -224,7 +224,7 @@ func (cm *ConfigManager) getSN() (string, error) {
 	log.V5("GETTING SERIAL NUMBER")
 	var out *exec.Cmd
 	if cm.Platform == "pi" {
-		out = exec.Command("/bin/sh", "-c", "sudo cat /proc/cpuinfo")
+		out = exec.Command("/bin/sh", "-c", "sudo cat /proc/cpuinfo | grep Serial | cut -d ' ' -f 2")
 	} else {
 		out = exec.Command("/bin/sh", "-c", "sudo cat /sys/class/dmi/id/board_serial")
 	}
@@ -232,8 +232,8 @@ func (cm *ConfigManager) getSN() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get S/N: %v", err)
 	}
-
 	sn := strings.ReplaceAll(string(res), "\n", "")
+	log.V5("sn", sn)
 	return sn, nil
 }
 
