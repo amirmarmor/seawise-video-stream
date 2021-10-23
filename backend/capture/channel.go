@@ -14,20 +14,21 @@ import (
 const interval = 50 * time.Millisecond
 
 type Channel struct {
-	created   time.Time
-	cleanup   bool
-	name      int
-	init      bool
-	cap       *gocv.VideoCapture
-	image     gocv.Mat
-	writer    *gocv.VideoWriter
-	Record    bool
-	Recording bool
-	rules     []core.Rule
-	path      string
-	Stream    *mjpeg.Stream
-	fps       int
-	Buffer    []byte
+	created        time.Time
+	cleanup        bool
+	name           int
+	init           bool
+	cap            *gocv.VideoCapture
+	image          gocv.Mat
+	writer         *gocv.VideoWriter
+	Record         bool
+	Recording      bool
+	rules          []core.Rule
+	path           string
+	Stream         *mjpeg.Stream
+	fps            int
+	lastImage      time.Time
+	startRecording time.Time
 }
 
 type Recording struct {
@@ -37,12 +38,11 @@ type Recording struct {
 
 func CreateChannel(channel int, rules []core.Rule, fps int) *Channel {
 	return &Channel{
-		name:       channel,
-		Stream:     mjpeg.NewStreamWithInterval(interval),
-		rules:      rules,
-		Recordings: make(map[int64]*Recording),
-		created:    time.Now(),
-		fps:        fps,
+		name:    channel,
+		Stream:  mjpeg.NewStreamWithInterval(interval),
+		rules:   rules,
+		created: time.Now(),
+		fps:     fps,
 	}
 }
 
@@ -118,7 +118,7 @@ func (c *Channel) Read() (*gocv.NativeByteBuffer, error) {
 	}
 
 	if videoRecord {
-		if (!c.Recording) {
+		if !c.Recording {
 			c.Recording = true
 			now := time.Now()
 			path, err := c.createSavePath()
@@ -203,26 +203,19 @@ func (c *Channel) checkImageRules() bool {
 			return false
 		}
 
-		var t int64
+		var t float64
 		if rule.Recurring == "Second" {
-			t = time.Minute.Milliseconds()
+			t = time.Minute.Seconds()
 		} else if rule.Recurring == "Minute" {
-			t = time.Hour.Milliseconds()
+			t = time.Hour.Seconds()
 		} else {
-			t = time.Hour.Milliseconds() * 24
+			t = time.Hour.Seconds() * 24
 		}
 
-		interval := time.Duration(t / rule.Duration)
-		if c.Recordings[rule.Id] == nil {
-			c.Recordings[rule.Id] = &Recording{
-				startTime:   now,
-				isRecording: true,
-			}
-			return true
-		}
+		interval := time.Duration(t / float64(rule.Duration))
 
-		if now.Sub(c.Recordings[rule.Id].startTime) >= interval {
-			c.Recordings[rule.Id].startTime = now
+		if now.Sub(c.lastImage) >= interval {
+			c.lastImage = now
 			return true
 		}
 	}
@@ -250,21 +243,17 @@ func (c *Channel) checkVideoRules() bool {
 		}
 
 		bar := GetTimeField(rule.Recurring, now)
+
 		if rule.Start == bar {
-			if c.Recordings[rule.Id] == nil {
-				c.Recordings[rule.Id] = &Recording{
-					true,
-					now,
-				}
-				return true
-			}
+			c.startRecording = now
 		}
 
-		if c.Recordings[rule.Id] != nil && now.Sub(c.Recordings[rule.Id].startTime) <= time.Second*time.Duration(rule.Duration) {
-			return true
+		if c.startRecording.IsZero() || now.Sub(c.startRecording) > time.Second*time.Duration(rule.Duration) {
+			c.startRecording = time.Time{}
+			return false
 		}
 
-		c.Recordings[rule.Id] = nil
+		return true
 	}
 	return false
 }
