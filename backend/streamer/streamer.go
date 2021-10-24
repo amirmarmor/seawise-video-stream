@@ -23,7 +23,7 @@ func Create(capture *capture.Capture) *Streamer {
 
 	return &Streamer{
 		Server: &http.Server{
-			Addr: ":80",
+			Addr: ":8080",
 		},
 		Ctx:    &ctx,
 		Cancel: cancel,
