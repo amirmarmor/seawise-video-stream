@@ -1,39 +1,38 @@
 package streamer
 
 import (
+	"context"
 	"net/http"
 	"strconv"
-	"www.seawise.com/shrimps/backend/capture"
-	"www.seawise.com/shrimps/backend/log"
+	"www.seawise.com/backend/capture"
 )
 
 type Streamer struct {
-	Client *http.ServeMux
-	Capt   *capture.Capture
+	Server *http.Server
+	Ctx    *context.Context
+	Cancel context.CancelFunc
 }
 
-func Create(capt *capture.Capture) *Streamer {
-	s := http.NewServeMux()
+func Create(capture *capture.Capture) *Streamer {
+	for i := 0; i < len(capture.Channels); i++ {
+		path := "/stream/" + strconv.Itoa(i)
+		http.HandleFunc(path, capture.Channels[i].Stream.ServeHTTP)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Streamer{
-		Client: s,
-		Capt: capt,
+		Server: &http.Server{
+			Addr: ":8080",
+		},
+		Ctx:    &ctx,
+		Cancel: cancel,
 	}
 }
 
-func (s *Streamer) Produce(){
-	for i:=0; i < len(s.Capt.Channels); i++ {
-		path := "/stream/" + strconv.Itoa(i)
-		log.V5("PATH:", string(path))
-		s.Client.Handle(path, s.Capt.Channels[i].Stream)
+func (s *Streamer) Stop(capture *capture.Capture) {
+	for _, channel := range capture.Channels {
+		channel.Stream.Close()
 	}
+	s.Cancel()
 }
-
-func (s *Streamer) Start() {
-	err := http.ListenAndServe(":8080", s.Client)
-	if err != nil {
-		panic(err)
-	}
-}
-
-

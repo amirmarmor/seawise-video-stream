@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"www.seawise.com/shrimps/backend/log"
+	"www.seawise.com/backend/log"
 )
 
 type DeviceInfo struct {
@@ -204,7 +204,6 @@ func (cm *ConfigManager) post(url string, postBody []byte) ([]byte, error) {
 }
 
 func (cm *ConfigManager) getPlatform() error {
-	log.V5("HERE")
 	out, err := exec.Command("/bin/sh", "-c", "uname -m").Output()
 	if err != nil {
 		return fmt.Errorf("failed to identify platform: %v", err)

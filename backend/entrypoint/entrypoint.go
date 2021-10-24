@@ -1,10 +1,10 @@
 package entrypoint
 
 import (
-	"www.seawise.com/shrimps/backend/capture"
-	"www.seawise.com/shrimps/backend/core"
-	"www.seawise.com/shrimps/backend/log"
-	"www.seawise.com/shrimps/backend/streamer"
+	"www.seawise.com/backend/capture"
+	"www.seawise.com/backend/core"
+	"www.seawise.com/backend/log"
+	"www.seawise.com/backend/streamer"
 )
 
 type EntryPoint struct {

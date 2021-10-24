@@ -1,4 +1,4 @@
-module www.seawise.com/shrimps/backend
+module www.seawise.com/backend
 
 go 1.16
 

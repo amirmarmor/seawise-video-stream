@@ -4,7 +4,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"www.seawise.com/shrimps/backend/log"
+	"www.seawise.com/backend/log"
+	"www.seawise.com/backend/streamer"
 )
 
 type Cleanup func()
@@ -21,12 +22,12 @@ func Produce() *CleanSigTerm {
 	return &s
 }
 
-func (s *CleanSigTerm) WaitForTermination() {
+func (s *CleanSigTerm) WaitForTermination(streamer streamer.Streamer) {
 	<-s.signalsChannel
 	log.Info("Termination starting")
-	//err := streamer.Server.Shutdown(*streamer.Ctx)
-	//if err != nil {
-	//	log.Error("failed to terminate")
-	//}
+	err := streamer.Server.Shutdown(*streamer.Ctx)
+	if err != nil {
+		log.Error("failed to terminate")
+	}
 	log.Info("Termination complete")
 }

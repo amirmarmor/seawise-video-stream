@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"www.seawise.com/shrimps/backend/core"
-	"www.seawise.com/shrimps/backend/log"
+	"www.seawise.com/backend/core"
+	"www.seawise.com/backend/log"
 )
 
 type Capture struct {
@@ -132,23 +132,30 @@ func (c *Capture) capture() error {
 	now := time.Now()
 	if now.Sub(c.lastUpdate) > time.Second*10 {
 		err := c.manager.GetConfig()
-		if err != nil {
-			return err
+		if err == nil {
+			err = json.Unmarshal([]byte(c.manager.Config.Rules), &c.rules)
+			if err != nil {
+				fmt.Println("failed to unmarshal config update: ", err)
+			} else {
+				log.V5("updated successful")
+			}
+		} else {
+			fmt.Println("failed to get config update: ", err)
 		}
-		c.lastUpdate = now
 
-		err = json.Unmarshal([]byte(c.manager.Config.Rules), &c.rules)
-		if err != nil {
-			return fmt.Errorf("failed to unmarshal rules: %v", err)
-		}
+		c.lastUpdate = now
 	}
 
 	for _, channel := range c.Channels {
 		channel.Record = c.manager.Config.RecordNow
 		channel.rules = c.rules
-		err := channel.Read()
+		buf, err := channel.Read()
 		if err != nil {
 			return fmt.Errorf("capture failed: %v", err)
+		}
+
+		if buf != nil {
+			buf.Close()
 		}
 	}
 	return nil
