@@ -115,51 +115,78 @@ func (c *Channel) Read() (*gocv.NativeByteBuffer, error) {
 		if !ok {
 			return nil, fmt.Errorf("read failed to write image")
 		}
+		return nil, nil
 	}
 
 	if videoRecord {
-		if !c.Recording {
-			log.V5("START RECORD")
-			c.Recording = true
-			now := time.Now()
-			path, err := c.createSavePath()
-			if err != nil {
-				return nil, fmt.Errorf("failed to create path: %v", err)
-			}
-
-			saveFileName := path + "/" + now.Format("2006-01-02--15-04-05") + ".avi"
-
-			c.writer, err = gocv.VideoWriterFile(saveFileName, "MJPG", float64(c.fps), c.image.Cols(), c.image.Rows(), true)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create writer", err)
-			}
-		}
-
-		err := c.writer.Write(c.image)
+		err := c.doRecord()
 		if err != nil {
-			return nil, fmt.Errorf("read failed to write: %v", err)
+			return nil, fmt.Errorf("fauled to record: %v", err)
 		}
-
 		return nil, nil
-	} else {
-		if(c.Recording){
-			log.V5("STOP RECORD")
-		}
-		c.Recording = false
-		quality := 50
-		buffer, err := gocv.IMEncodeWithParams(".jpg", c.image, []int{gocv.IMWriteJpegQuality, quality})
-		if err != nil {
-			return nil, fmt.Errorf("read failed to encode: %v", err)
-		}
-
-		err = c.Stream.Update(buffer.GetBytes())
-		if err != nil {
-			return nil, fmt.Errorf("failed to update stream in read: %v", err)
-		}
-
-		return buffer, nil
 	}
 
+	buf, err := c.doStream()
+	if err != nil {
+		return nil, fmt.Errorf("failed to stream: %v", err)
+	}
+	return buf, nil
+
+}
+
+func (c *Channel) doStream() (*gocv.NativeByteBuffer, error) {
+	if c.Recording {
+		log.V5("STOP RECORD")
+	}
+	c.Recording = false
+
+	quality := 50
+	buffer, err := gocv.IMEncodeWithParams(".jpg", c.image, []int{gocv.IMWriteJpegQuality, quality})
+	if err != nil {
+		return nil, fmt.Errorf("read failed to encode: %v", err)
+	}
+
+	err = c.Stream.Update(buffer.GetBytes())
+	if err != nil {
+		return nil, fmt.Errorf("failed to update stream in read: %v", err)
+	}
+
+	return buffer, nil
+}
+
+func (c *Channel) doRecord() error {
+	if !c.Recording {
+		err := c.createVWriter()
+		if err != nil {
+			return fmt.Errorf("faield to create writer: %v", err)
+		}
+	}
+
+	err := c.writer.Write(c.image)
+	if err != nil {
+		return fmt.Errorf("read failed to write: %v", err)
+	}
+
+	return nil
+}
+
+func (c *Channel) createVWriter() error {
+	log.V5("START RECORD")
+	c.Recording = true
+	now := time.Now()
+	path, err := c.createSavePath()
+	if err != nil {
+		return fmt.Errorf("failed to create path: %v", err)
+	}
+
+	saveFileName := path + "/" + now.Format("2006-01-02--15-04-05") + ".avi"
+
+	c.writer, err = gocv.VideoWriterFile(saveFileName, "MJPG", float64(c.fps), c.image.Cols(), c.image.Rows(), true)
+	if err != nil {
+		return fmt.Errorf("failed to create writer", err)
+	}
+
+	return nil
 }
 
 func (c *Channel) createSavePath() (string, error) {
