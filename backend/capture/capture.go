@@ -149,14 +149,16 @@ func (c *Capture) capture() error {
 	for _, channel := range c.Channels {
 		channel.Record = c.manager.Config.RecordNow
 		channel.rules = c.rules
-		buf, err := channel.Read()
-		if err != nil {
-			return fmt.Errorf("capture failed: %v", err)
-		}
+		go func(){
+			buf, err := channel.Read()
+			if err != nil {
+				fmt.Println(fmt.Errorf("capture failed: %v", err))
+			}
 
-		if buf != nil {
-			buf.Close()
-		}
+			if buf != nil {
+				buf.Close()
+			}
+		}()
 	}
 	return nil
 
