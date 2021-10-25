@@ -93,15 +93,9 @@ func (c *Capture) detectCameras() error {
 }
 
 func (c *Capture) Start() {
-	for c.run {
-		select {
-		case s := <-c.StopChannel:
-			c.stop(s)
-		default:
-			c.capture()
-		}
+	for _, ch := range c.Channels {
+		go ch.Start()
 	}
-	c.StopChannel <- "restarting"
 }
 
 func (c *Capture) stop(s string) {
@@ -149,14 +143,14 @@ func (c *Capture) capture() error {
 	for _, channel := range c.Channels {
 		channel.Record = c.manager.Config.RecordNow
 		channel.rules = c.rules
-		buf, err := channel.Read()
-		if err != nil {
-			return fmt.Errorf("capture failed: %v", err)
-		}
-
-		if buf != nil {
-			buf.Close()
-		}
+		go channel.Read()
+		//if err != nil {
+		//	return fmt.Errorf("capture failhttps://www.dynamsoft.com/codepool/opencv-webcam-golangapp-desktop-web.htmled: %v", err)
+		//}
+		//
+		//if buf != nil {
+		//	buf.Close()
+		//}
 	}
 	return nil
 

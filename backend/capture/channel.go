@@ -6,7 +6,6 @@ import (
 	"gocv.io/x/gocv"
 	"os"
 	"reflect"
-	"strconv"
 	"time"
 	"www.seawise.com/backend/core"
 	"www.seawise.com/backend/log"
@@ -15,6 +14,7 @@ import (
 const interval = 50 * time.Millisecond
 
 type Channel struct {
+	run            bool
 	created        time.Time
 	cleanup        bool
 	name           int
@@ -30,7 +30,7 @@ type Channel struct {
 	fps            int
 	lastImage      time.Time
 	startRecording time.Time
-	Window         *gocv.Window
+	StopChannel    chan string
 }
 
 type Recording struct {
@@ -59,7 +59,6 @@ func (c *Channel) Init() error {
 	vc.Set(gocv.VideoCaptureFrameHeight, 1080)
 	vc.Set(gocv.VideoCaptureBufferSize, 10)
 	img := gocv.NewMat()
-	window := gocv.NewWindow(strconv.Itoa(c.name))
 
 	ok := vc.Read(&img)
 	if !ok {
@@ -68,8 +67,8 @@ func (c *Channel) Init() error {
 
 	c.cap = vc
 	c.image = img
-	c.Window = window
 	c.init = true
+	c.run = true
 
 	return nil
 }
@@ -91,6 +90,25 @@ func (c *Channel) close() error {
 
 	c.init = false
 	return nil
+}
+
+func (c *Channel) Start() {
+	for c.run {
+		select {
+		case <-c.StopChannel:
+			c.close()
+		default:
+			buf, err := c.Read()
+			if err != nil {
+				log.Warn(fmt.Sprintf("Faialure in READ of channel %v continuing: %v", c.name, err))
+			}
+
+			if buf != nil {
+				buf.Close()
+			}
+		}
+	}
+	c.StopChannel <- "restarting"
 }
 
 func (c *Channel) Read() (*gocv.NativeByteBuffer, error) {
@@ -136,11 +154,7 @@ func (c *Channel) Read() (*gocv.NativeByteBuffer, error) {
 		return nil, fmt.Errorf("failed to stream: %v", err)
 	}
 
-	//c.Window.IMShow(c.image)
-	//c.Window.WaitKey(1)
-
 	return buf, nil
-
 }
 
 func (c *Channel) doStream() (*gocv.NativeByteBuffer, error) {
