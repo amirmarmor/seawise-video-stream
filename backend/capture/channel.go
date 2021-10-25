@@ -6,6 +6,7 @@ import (
 	"gocv.io/x/gocv"
 	"os"
 	"reflect"
+	"strconv"
 	"time"
 	"www.seawise.com/backend/core"
 	"www.seawise.com/backend/log"
@@ -29,6 +30,7 @@ type Channel struct {
 	fps            int
 	lastImage      time.Time
 	startRecording time.Time
+	Window         *gocv.Window
 }
 
 type Recording struct {
@@ -55,8 +57,9 @@ func (c *Channel) Init() error {
 	vc.Set(gocv.VideoCaptureFPS, float64(c.fps))
 	vc.Set(gocv.VideoCaptureFrameWidth, 1920)
 	vc.Set(gocv.VideoCaptureFrameHeight, 1080)
-	vc.Set(gocv.VideoCaptureBufferSize, 1)
+	vc.Set(gocv.VideoCaptureBufferSize, 10)
 	img := gocv.NewMat()
+	window := gocv.NewWindow(strconv.Itoa(c.name))
 
 	ok := vc.Read(&img)
 	if !ok {
@@ -65,6 +68,7 @@ func (c *Channel) Init() error {
 
 	c.cap = vc
 	c.image = img
+	c.Window = window
 	c.init = true
 
 	return nil
@@ -131,6 +135,10 @@ func (c *Channel) Read() (*gocv.NativeByteBuffer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to stream: %v", err)
 	}
+
+	//c.Window.IMShow(c.image)
+	//c.Window.WaitKey(1)
+
 	return buf, nil
 
 }
