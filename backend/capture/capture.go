@@ -77,14 +77,16 @@ func (c *Capture) detectCameras() error {
 	}
 
 	c.Channels = make([]*Channel, 0)
-	for _, num := range vids {
-		if num >= c.manager.Config.Offset {
-			channel := CreateChannel(num, c.rules, 30)
-			err := channel.Init()
-			if err != nil {
-				continue
-			} else {
-				c.Channels = append(c.Channels, channel)
+	for i, num := range vids {
+		if i < 10 {
+			if num >= c.manager.Config.Offset {
+				channel := CreateChannel(num, c.rules, 30)
+				err := channel.Init()
+				if err != nil {
+					continue
+				} else {
+					c.Channels = append(c.Channels, channel)
+				}
 			}
 		}
 	}
