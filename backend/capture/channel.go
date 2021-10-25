@@ -98,64 +98,61 @@ func (c *Channel) Start() {
 		case <-c.StopChannel:
 			c.close()
 		default:
-			buf, err := c.Read()
-			if err != nil {
-				log.Warn(fmt.Sprintf("Faialure in READ of channel %v continuing: %v", c.name, err))
-				//c.Init()
-			}
-
-			if buf != nil {
-				buf.Close()
-			}
+			c.Read()
 		}
 	}
 	c.StopChannel <- "restarting"
 }
 
-func (c *Channel) Read() (*gocv.NativeByteBuffer, error) {
+func (c *Channel) Read() {
 	imageRecord := c.checkImageRules()
 	videoRecord := c.checkVideoRules()
 
 	if !c.init {
 		err := c.Init()
 		if err != nil {
-			return nil, fmt.Errorf("read init failed to close: %v", err)
+			log.Warn(fmt.Sprintf("read init failed to close: %v", err))
 		}
 	}
 
 	ok := c.cap.Read(&c.image)
 	if !ok {
-		return nil, fmt.Errorf("read encountered channel closed %v\n", c.name)
+		log.Warn(fmt.Sprintf("read encountered channel closed %v\n", c.name))
 	}
 
 	if c.image.Empty() {
-		return nil, nil
-	}
-
-	if imageRecord {
-		now := time.Now()
-		saveFileName := c.path + "/" + now.Format("2006-01-02--15-04-05") + "-image.jpg"
-		ok := gocv.IMWrite(saveFileName, c.image)
-		if !ok {
-			return nil, fmt.Errorf("read failed to write image")
+		fmt.Println("empty")
+	} else {
+		if imageRecord {
+			now := time.Now()
+			saveFileName := c.path + "/" + now.Format("2006-01-02--15-04-05") + "-image.jpg"
+			ok := gocv.IMWrite(saveFileName, c.image)
+			if !ok {
+				log.Warn(fmt.Sprintf("read failed to write image"))
+			}
+			//return nil, nil
 		}
-		return nil, nil
-	}
 
-	if videoRecord {
-		err := c.doRecord()
+		if videoRecord {
+			err := c.doRecord()
+			if err != nil {
+				log.Warn(fmt.Sprintf("fauled to record: %v", err))
+			}
+			//return nil, nil
+		}
+
+		_, err := c.doStream()
 		if err != nil {
-			return nil, fmt.Errorf("fauled to record: %v", err)
+			log.Warn(fmt.Sprintf("failed to stream: %v", err))
 		}
-		return nil, nil
 	}
 
-	buf, err := c.doStream()
-	if err != nil {
-		return nil, fmt.Errorf("failed to stream: %v", err)
-	}
 
-	return buf, nil
+	//c.Window.IMShow(c.image)
+	//c.Window.WaitKey(1)
+
+	//return buf, nil
+
 }
 
 func (c *Channel) doStream() (*gocv.NativeByteBuffer, error) {
