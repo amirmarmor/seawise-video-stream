@@ -101,7 +101,7 @@ func (c *Channel) Start() {
 			buf, err := c.Read()
 			if err != nil {
 				log.Warn(fmt.Sprintf("Faialure in READ of channel %v continuing: %v", c.name, err))
-				c.Init()
+				//c.Init()
 			}
 
 			if buf != nil {
