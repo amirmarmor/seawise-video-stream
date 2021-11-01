@@ -55,9 +55,9 @@ func (c *Channel) Init() error {
 	}
 	vc.Set(gocv.VideoCaptureFOURCC, vc.ToCodec("mjpg"))
 	vc.Set(gocv.VideoCaptureFPS, float64(c.fps))
-	vc.Set(gocv.VideoCaptureFrameWidth, 1920)
-	vc.Set(gocv.VideoCaptureFrameHeight, 1080)
-	//vc.Set(gocv.VideoCaptureBufferSize, 10)
+	vc.Set(gocv.VideoCaptureFrameWidth, 1280)
+	vc.Set(gocv.VideoCaptureFrameHeight, 720)
+	vc.Set(gocv.VideoCaptureBufferSize, 10)
 	img := gocv.NewMat()
 
 	ok := vc.Read(&img)
@@ -164,7 +164,7 @@ func (c *Channel) doStream() (*gocv.NativeByteBuffer, error) {
 	}
 	c.Recording = false
 
-	quality := 50
+	quality := 100
 	buffer, err := gocv.IMEncodeWithParams(".jpg", c.image, []int{gocv.IMWriteJpegQuality, quality})
 	if err != nil {
 		return nil, fmt.Errorf("read failed to encode: %v", err)

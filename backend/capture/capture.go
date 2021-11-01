@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 	"www.seawise.com/backend/core"
-	"www.seawise.com/backend/log"
 )
 
 type Capture struct {
@@ -98,60 +97,3 @@ func (c *Capture) Start() {
 	}
 }
 
-func (c *Capture) stop(s string) {
-	log.V5(fmt.Sprintf("capture - %s", s))
-	c.run = false
-}
-
-func (c *Capture) restart() error {
-	log.V5(fmt.Sprintf("restarting"))
-	c.run = true
-
-	for i := 0; i < len(c.Channels); i++ {
-		c.Channels[i].close()
-	}
-
-	c.Channels = make([]*Channel, 0)
-
-	err := c.Init()
-	if err != nil {
-		return err
-	}
-
-	go c.Start()
-	return nil
-}
-
-func (c *Capture) capture() error {
-	now := time.Now()
-	if now.Sub(c.lastUpdate) > time.Second*10 {
-		err := c.manager.GetConfig()
-		if err == nil {
-			err = json.Unmarshal([]byte(c.manager.Config.Rules), &c.rules)
-			if err != nil {
-				fmt.Println("failed to unmarshal config update: ", err)
-			} else {
-				log.V5("updated successful")
-			}
-		} else {
-			fmt.Println("failed to get config update: ", err)
-		}
-
-		c.lastUpdate = now
-	}
-
-	for _, channel := range c.Channels {
-		channel.Record = c.manager.Config.RecordNow
-		channel.rules = c.rules
-		go channel.Read()
-		//if err != nil {
-		//	return fmt.Errorf("capture failhttps://www.dynamsoft.com/codepool/opencv-webcam-golangapp-desktop-web.htmled: %v", err)
-		//}
-		//
-		//if buf != nil {
-		//	buf.Close()
-		//}
-	}
-	return nil
-
-}
