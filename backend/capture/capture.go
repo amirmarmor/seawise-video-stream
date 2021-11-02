@@ -98,6 +98,8 @@ func (c *Capture) detectCameras() error {
 		}
 	}
 
+	log.V5(fmt.Sprintf("Done checking vid - %v, %v", vids, devs))
+
 	c.Channels = make([]*Channel, 0)
 	for _, num := range vids {
 		if num >= c.manager.Config.Offset {
@@ -111,6 +113,7 @@ func (c *Capture) detectCameras() error {
 		}
 	}
 
+	log.V5(fmt.Sprintf("Initiated all channels - %v", c.Channels))
 	return nil
 }
 
@@ -118,4 +121,5 @@ func (c *Capture) Start() {
 	for _, ch := range c.Channels {
 		go ch.Start()
 	}
+	log.V5(fmt.Sprintf("Started channels"))
 }

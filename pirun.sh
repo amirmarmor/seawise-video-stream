@@ -6,7 +6,7 @@ cd backend || exit
 #sudo modprobe uvcvideo nodrop=1 timeout=5000 quirks=0x80
 
 export VERBOSE=5
-export APIHOST="localhost:5000"
+export APIHOST="192.168.1.14:5000"
 echo $APIHOST
 cmd=./start
 $cmd

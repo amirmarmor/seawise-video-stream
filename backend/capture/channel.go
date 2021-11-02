@@ -133,11 +133,10 @@ func (c *Channel) Read() {
 	}
 
 	if videoRecord {
-		fmt.Println("DOING RECORD")
-		//err := c.doRecord()
-		//if err != nil {
-		//	log.Warn(fmt.Sprintf("fauled to record: %v", err))
-		//}
+		err := c.doRecord()
+		if err != nil {
+			log.Warn(fmt.Sprintf("fauled to record: %v", err))
+		}
 	}
 
 	err := c.doStream()
