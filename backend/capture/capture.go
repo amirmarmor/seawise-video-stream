@@ -102,7 +102,6 @@ func (c *Capture) detectCameras() error {
 	for _, num := range vids {
 		if num >= c.manager.Config.Offset {
 			channel := CreateChannel(num, c.rules, c.manager.Config.Fps)
-			channel.Test = "a"
 			err := channel.Init()
 			if err != nil {
 				continue
