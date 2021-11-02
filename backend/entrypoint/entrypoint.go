@@ -42,7 +42,7 @@ func (p *EntryPoint) buildBlocks() {
 		panic(err)
 	}
 
-	p.capt = capture.Create(p.manager)
+	p.capt = capture.Create(p.manager, 5)
 	p.capt.Init()
 
 	p.streamer = streamer.Create(p.capt)

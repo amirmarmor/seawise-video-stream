@@ -19,7 +19,8 @@ type Capture struct {
 	lastUpdate time.Time
 	rules      []core.Rule
 	timer      *time.Ticker
-	stop 			 chan struct{}
+	stop       chan struct{}
+	attempts   int
 }
 
 type ShowRecord struct {
@@ -27,11 +28,12 @@ type ShowRecord struct {
 	Channel int
 }
 
-func Create(config *core.ConfigManager) *Capture {
+func Create(config *core.ConfigManager, attempts int) *Capture {
 	return &Capture{
 		manager:    config,
 		lastUpdate: time.Now(),
-		timer: time.NewTicker(10 * time.Second),
+		timer:      time.NewTicker(10 * time.Second),
+		attempts:   attempts,
 	}
 }
 
@@ -58,16 +60,16 @@ func (c *Capture) Init() error {
 func (c *Capture) updateConfig() {
 	for {
 		select {
-			case <- c.timer.C:
-				c.updateChannels()
-			case <- c.stop:
-				c.timer.Stop()
-				return
+		case <-c.timer.C:
+			c.updateChannels()
+		case <-c.stop:
+			c.timer.Stop()
+			return
 		}
 	}
 }
 
-func (c *Capture) updateChannels(){
+func (c *Capture) updateChannels() {
 	err := c.manager.GetConfig()
 	if err != nil {
 		log.Warn(fmt.Sprintf("Failed to update configuration: %v", err))
@@ -98,19 +100,29 @@ func (c *Capture) detectCameras() error {
 		}
 	}
 
-	log.V5(fmt.Sprintf("Done checking vid - %v, %v", vids, devs))
+	log.V5(fmt.Sprintf("Done checking vid - %v", vids))
 
-	c.Channels = make([]*Channel, 0)
-	for _, num := range vids {
-		if num >= c.manager.Config.Offset {
-			channel := CreateChannel(num, c.rules, c.manager.Config.Fps)
-			err := channel.Init()
-			if err != nil {
-				continue
-			} else {
-				c.Channels = append(c.Channels, channel)
+	i := 0
+	for i < c.attempts {
+		log.V5(fmt.Sprintf("Attemting to start channel - %v / %v", i, c.attempts))
+		c.Channels = make([]*Channel, 0)
+		for _, num := range vids {
+			if num >= c.manager.Config.Offset {
+				channel := CreateChannel(num, c.rules, c.manager.Config.Fps)
+				err := channel.Init()
+				if err != nil {
+					continue
+				} else {
+					c.Channels = append(c.Channels, channel)
+				}
 			}
 		}
+
+		if len(c.Channels) > 0 {
+			i = 99
+		}
+
+		i++
 	}
 
 	log.V5(fmt.Sprintf("Initiated all channels - %v", c.Channels))
