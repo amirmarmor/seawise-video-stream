@@ -7,18 +7,27 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"www.seawise.com/backend/log"
 )
 
+var home = os.Getenv("HOME") + "/seawise-video-stream/backend/"
+var deviceInfoFile = home + "core/saved/deviceInfo.conf"
+var deviceConfigFile = home + "core/saved/deviceConfig.conf"
+
 type DeviceInfo struct {
 	Sn       string `json:"sn"`
 	Owner    string `json:"owner"`
 	Id       int    `json:"id"`
-	Ip       string `json:"ip"`
+	Ip       *IP    `json:"ip"`
 	Channels int    `json:"channels"`
+}
+
+type IPIFYResponse struct {
+	Ip string `json:"ip"`
 }
 
 type RegisterResponse struct {
@@ -48,8 +57,13 @@ type Rule struct {
 	Id        int64  `json:"id"`
 	Recurring string `json:"recurring"`
 	Start     int64  `json:"start,string"`
-	Duration  int64  `json:"duration,string"`
+	Duration  int64  `json:"dgetIpuration,string"`
 	Type      string `json:"type"`
+}
+
+type IP struct {
+	Local    string `json:"local"`
+	External string `json:"external"`
 }
 
 func Produce() (*ConfigManager, error) {
@@ -76,42 +90,48 @@ func (cm *ConfigManager) GetConfig() error {
 		Id:     cm.Info.Id,
 	}
 
+	var body []byte
+
 	resp, err := http.Get("http://" + Api.Host + "/api/device/" + strconv.Itoa(cm.Info.Id))
-	if err != nil {
-		return err
-	}
 
-	if resp.StatusCode == 200 {
-		var body []byte
-		body, err = ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
+	if err != nil || resp.StatusCode != 200 {
+		log.Warn(fmt.Sprintf("failed to get Configuration from remote using local: %v", err))
 
-		err = json.Unmarshal(body, cm.Config)
+		body, err = ioutil.ReadFile(deviceConfigFile)
 		if err != nil {
-			return fmt.Errorf("failed to unmarshal: %v", err)
+			return fmt.Errorf("failed to read saved config EXITING: %v", err)
 		}
 	} else {
-		err = cm.SetConfig()
+		body, err = ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return fmt.Errorf("failed to set default config: %v", err)
+			return fmt.Errorf("Invalid response from server EXITING: %v", err)
 		}
+
+		err = ioutil.WriteFile(deviceConfigFile, body, 0644)
+		if err != nil {
+			return fmt.Errorf("Failed to write config to local EXITING: %v", err)
+		}
+
+		defer resp.Body.Close()
 	}
 
-	defer resp.Body.Close()
-	return nil
-}
-
-func (cm *ConfigManager) SetConfig() error {
-
-	cm.Config.RecordNow = false
-	cm.Config.Cleanup = true
-	cm.Config.Fps = 30
-	cm.Config.Rules = "[]"
+	err = json.Unmarshal(body, cm.Config)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal: %v", err)
+	}
 
 	return nil
 }
+
+//func (cm *ConfigManager) SetConfig() error {
+//
+//	cm.Config.RecordNow = falsedefer resp.Body.Close()
+//	cm.Config.Cleanup = true
+//	cm.Config.Fps = 30
+//	cm.Config.Rules = "[]"
+//
+//	return nil
+//}
 
 func (cm *ConfigManager) UpdateDeviceInfo(channels int) error {
 	ip, err := cm.getIp()
@@ -171,9 +191,20 @@ func (cm *ConfigManager) Register() error {
 
 	apiUrl := "http://" + Api.Host + "/api/register"
 	log.V5(apiUrl)
-	body, err := cm.post(apiUrl, postBody)
+	var body []byte
+	body, err = cm.post(apiUrl, postBody)
 	if err != nil {
-		return fmt.Errorf("failed to register: %v", err)
+		log.Warn(fmt.Sprintf("failed to register device no connectivity, looking to saved info: %v", err))
+		body, err = ioutil.ReadFile(deviceInfoFile)
+		if err != nil {
+			return fmt.Errorf("failed to read info file and no connectivity: %v", err)
+		}
+	} else {
+		err := os.WriteFile(deviceInfoFile, body, 0644)
+		if err != nil {
+			return fmt.Errorf("failed to write info EXITING: %v", err)
+		}
+
 	}
 
 	response := &RegisterResponse{}
@@ -209,15 +240,14 @@ func (cm *ConfigManager) getPlatform() error {
 		return fmt.Errorf("failed to identify platform: %v", err)
 	}
 	platform := strings.ReplaceAll(string(out), "\n", "")
-	if strings.Contains(platform, "arm"){
+	if platform == "aarch64" {
 		cm.Platform = "pi"
 	} else {
 		cm.Platform = "other"
 	}
-	log.V5("MY PLATFORM IS", cm.Platform)
+	log.V5(fmt.Sprintf("MY PLATFORM IS - %v", cm.Platform))
 	return nil
 }
-
 
 func (cm *ConfigManager) getSN() (string, error) {
 	log.V5("GETTING SERIAL NUMBER")
@@ -232,21 +262,37 @@ func (cm *ConfigManager) getSN() (string, error) {
 		return "", fmt.Errorf("failed to get S/N: %v", err)
 	}
 	sn := strings.ReplaceAll(string(res), "\n", "")
-	log.V5("sn", sn)
+	log.V5(fmt.Sprintf("SERIAL NUMBER IS - ", sn))
 	return sn, nil
 }
 
-func (cm *ConfigManager) getIp() (string, error) {
+func (cm *ConfigManager) getIp() (*IP, error) {
 	if cm.Platform != "pi" {
-		return "127.0.0.1", nil
+		return &IP{"127.0.0.1", "127.0.0.1"}, nil
 	}
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
-		return "", fmt.Errorf("failed to get IP: %v", err)
+		return nil, fmt.Errorf("failed to get IP: %v", err)
 	}
 	defer conn.Close()
 
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 
-	return localAddr.IP.String(), nil
+	resp, err := http.Get("https://api.ipify.org?format=json")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get external IP: %v", err)
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	ipJson := &IPIFYResponse{}
+	err = json.Unmarshal(body, ipJson)
+
+	return &IP{
+		localAddr.IP.String(),
+		ipJson.Ip,
+	}, nil
 }
