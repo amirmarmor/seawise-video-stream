@@ -30,7 +30,7 @@ func (p *EntryPoint) Run() {
 		log.Error("FAILED TO START SERVER", err)
 	}
 
-	p.streamer.Stop(p.capt)
+	//p.streamer.Stop(p.capt)
 
 	cleanSigTerm.WaitForTermination(*p.streamer)
 }

@@ -9,18 +9,17 @@ import (
 	"strings"
 	"time"
 	"www.seawise.com/backend/core"
+	"www.seawise.com/backend/log"
 )
 
 type Capture struct {
-	counter     int
-	run         bool
-	manager     *core.ConfigManager
-	Channels    []*Channel
-	Action      chan *ShowRecord
-	StopChannel chan string
-	Errors      chan error
-	lastUpdate  time.Time
-	rules       []core.Rule
+	counter    int
+	manager    *core.ConfigManager
+	Channels   []*Channel
+	lastUpdate time.Time
+	rules      []core.Rule
+	timer      *time.Ticker
+	stop 			 chan struct{}
 }
 
 type ShowRecord struct {
@@ -30,11 +29,9 @@ type ShowRecord struct {
 
 func Create(config *core.ConfigManager) *Capture {
 	return &Capture{
-		manager:     config,
-		run:         true,
-		Action:      make(chan *ShowRecord, 0),
-		StopChannel: make(chan string, 0),
-		lastUpdate:  time.Now(),
+		manager:    config,
+		lastUpdate: time.Now(),
+		timer: time.NewTicker(10 * time.Second),
 	}
 }
 
@@ -54,7 +51,33 @@ func (c *Capture) Init() error {
 		return fmt.Errorf("failed to update registration: %v", err)
 	}
 
+	go c.updateConfig()
 	return nil
+}
+
+func (c *Capture) updateConfig() {
+	for {
+		select {
+			case <- c.timer.C:
+				c.updateChannels()
+			case <- c.stop:
+				c.timer.Stop()
+				return
+		}
+	}
+}
+
+func (c *Capture) updateChannels(){
+	err := c.manager.GetConfig()
+	if err != nil {
+		log.Warn(fmt.Sprintf("Failed to update configuration: %v", err))
+		return
+	}
+
+	for _, channel := range c.Channels {
+		channel.Rules = c.rules
+		channel.Record = c.manager.Config.RecordNow
+	}
 }
 
 func (c *Capture) detectCameras() error {
@@ -78,7 +101,8 @@ func (c *Capture) detectCameras() error {
 	c.Channels = make([]*Channel, 0)
 	for _, num := range vids {
 		if num >= c.manager.Config.Offset {
-			channel := CreateChannel(num, c.rules, 30)
+			channel := CreateChannel(num, c.rules, c.manager.Config.Fps)
+			channel.Test = "a"
 			err := channel.Init()
 			if err != nil {
 				continue
@@ -96,4 +120,3 @@ func (c *Capture) Start() {
 		go ch.Start()
 	}
 }
-

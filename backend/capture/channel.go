@@ -2,7 +2,7 @@ package capture
 
 import (
 	"fmt"
-	"github.com/mattn/go-mjpeg"
+	"github.com/hybridgroup/mjpeg"
 	"gocv.io/x/gocv"
 	"os"
 	"reflect"
@@ -11,12 +11,9 @@ import (
 	"www.seawise.com/backend/log"
 )
 
-const interval = 50 * time.Millisecond
-
 type Channel struct {
 	run            bool
 	created        time.Time
-	cleanup        bool
 	name           int
 	init           bool
 	cap            *gocv.VideoCapture
@@ -24,7 +21,7 @@ type Channel struct {
 	writer         *gocv.VideoWriter
 	Record         bool
 	Recording      bool
-	rules          []core.Rule
+	Rules          []core.Rule
 	path           string
 	Stream         *mjpeg.Stream
 	fps            int
@@ -41,8 +38,8 @@ type Recording struct {
 func CreateChannel(channel int, rules []core.Rule, fps int) *Channel {
 	return &Channel{
 		name:    channel,
-		Stream:  mjpeg.NewStreamWithInterval(interval),
-		rules:   rules,
+		Stream:  mjpeg.NewStream(),
+		Rules:   rules,
 		created: time.Now(),
 		fps:     fps,
 	}
@@ -57,7 +54,7 @@ func (c *Channel) Init() error {
 	vc.Set(gocv.VideoCaptureFPS, float64(c.fps))
 	vc.Set(gocv.VideoCaptureFrameWidth, 1280)
 	vc.Set(gocv.VideoCaptureFrameHeight, 720)
-	vc.Set(gocv.VideoCaptureBufferSize, 10)
+	vc.Set(gocv.VideoCaptureBufferSize, 5)
 	img := gocv.NewMat()
 
 	ok := vc.Read(&img)
@@ -98,38 +95,32 @@ func (c *Channel) Start() {
 		case <-c.StopChannel:
 			c.close()
 		default:
-			buf, err := c.Read()
-			if err != nil {
-				log.Warn(fmt.Sprintf("Faialure in READ of channel %v continuing: %v", c.name, err))
-				c.Init()
-			}
-
-			if buf != nil {
-				buf.Close()
-			}
+			c.Read()
 		}
 	}
 	c.StopChannel <- "restarting"
 }
 
-func (c *Channel) Read() (*gocv.NativeByteBuffer, error) {
+func (c *Channel) Read() {
 	imageRecord := c.checkImageRules()
 	videoRecord := c.checkVideoRules()
 
 	if !c.init {
 		err := c.Init()
 		if err != nil {
-			return nil, fmt.Errorf("read init failed to close: %v", err)
+			log.Warn(fmt.Sprintf("read init failed to close: %v", err))
+			c.run = false
 		}
 	}
 
 	ok := c.cap.Read(&c.image)
 	if !ok {
-		return nil, fmt.Errorf("read encountered channel closed %v\n", c.name)
+		log.Warn(fmt.Sprintf("read encountered channel closed %v\n", c.name))
 	}
 
 	if c.image.Empty() {
-		return nil, nil
+		log.V5(fmt.Sprintf("Empty Image"))
+		return
 	}
 
 	if imageRecord {
@@ -137,45 +128,43 @@ func (c *Channel) Read() (*gocv.NativeByteBuffer, error) {
 		saveFileName := c.path + "/" + now.Format("2006-01-02--15-04-05") + "-image.jpg"
 		ok := gocv.IMWrite(saveFileName, c.image)
 		if !ok {
-			return nil, fmt.Errorf("read failed to write image")
+			log.Warn(fmt.Sprintf("failed to write image"))
 		}
-		return nil, nil
 	}
 
 	if videoRecord {
-		err := c.doRecord()
-		if err != nil {
-			return nil, fmt.Errorf("fauled to record: %v", err)
-		}
-		return nil, nil
+		fmt.Println("DOING RECORD")
+		//err := c.doRecord()
+		//if err != nil {
+		//	log.Warn(fmt.Sprintf("fauled to record: %v", err))
+		//}
 	}
 
-	buf, err := c.doStream()
+	err := c.doStream()
 	if err != nil {
-		return nil, fmt.Errorf("failed to stream: %v", err)
+		log.Warn(fmt.Sprintf("failed to stream: %v", err))
 	}
-
-	return buf, nil
 }
 
-func (c *Channel) doStream() (*gocv.NativeByteBuffer, error) {
+func (c *Channel) doStream() error {
 	if c.Recording {
 		log.V5("STOP RECORD")
 	}
+
 	c.Recording = false
 
-	quality := 100
-	buffer, err := gocv.IMEncodeWithParams(".jpg", c.image, []int{gocv.IMWriteJpegQuality, quality})
+	buffer, err := gocv.IMEncode(".jpg", c.image)
 	if err != nil {
-		return nil, fmt.Errorf("read failed to encode: %v", err)
+		return fmt.Errorf("read failed to encode: %v", err)
 	}
 
-	err = c.Stream.Update(buffer.GetBytes())
+	c.Stream.UpdateJPEG(buffer.GetBytes())
 	if err != nil {
-		return nil, fmt.Errorf("failed to update stream in read: %v", err)
+		return fmt.Errorf("failed to update stream in read: %v", err)
 	}
 
-	return buffer, nil
+	buffer.Close()
+	return nil
 }
 
 func (c *Channel) doRecord() error {
@@ -214,7 +203,6 @@ func (c *Channel) createVWriter() error {
 }
 
 func (c *Channel) createSavePath() (string, error) {
-	now := time.Now()
 	_, err := os.Stat("videos")
 
 	if os.IsNotExist(err) {
@@ -238,20 +226,12 @@ func (c *Channel) createSavePath() (string, error) {
 		}
 	}
 
-	if c.cleanup && now.Sub(c.created) >= time.Hour*24 {
-		err := os.RemoveAll(path)
-		if err != nil {
-			log.Error("couldnt remove folder", path)
-		}
-		c.created = now
-	}
-
 	return path, nil
 }
 
 func (c *Channel) checkImageRules() bool {
 	now := time.Now()
-	for _, rule := range c.rules {
+	for _, rule := range c.Rules {
 		if rule.Type != "image" {
 			return false
 		}
@@ -285,11 +265,11 @@ func (c *Channel) checkVideoRules() bool {
 		return true
 	}
 
-	if len(c.rules) == 0 {
+	if len(c.Rules) == 0 {
 		return false
 	}
 
-	for _, rule := range c.rules {
+	for _, rule := range c.Rules {
 
 		if rule.Type != "video" {
 			return false
