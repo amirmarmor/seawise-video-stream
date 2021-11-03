@@ -9,7 +9,7 @@ export VERBOSE=0
 export APIHOST="seawisely.com"
 echo $APIHOST
 cmd=./start
-$cmd
+$cmd &
 
 
 now=$(date +"%T")
