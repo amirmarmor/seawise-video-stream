@@ -240,7 +240,7 @@ func (cm *ConfigManager) getPlatform() error {
 		return fmt.Errorf("failed to identify platform: %v", err)
 	}
 	platform := strings.ReplaceAll(string(out), "\n", "")
-	if platform == "aarch64" {
+	if platform == "aarch64" || platform == "armv7l" {
 		cm.Platform = "pi"
 	} else {
 		cm.Platform = "other"
