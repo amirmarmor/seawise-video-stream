@@ -262,7 +262,7 @@ func (cm *ConfigManager) getSN() (string, error) {
 		return "", fmt.Errorf("failed to get S/N: %v", err)
 	}
 	sn := strings.ReplaceAll(string(res), "\n", "")
-	log.V5(fmt.Sprintf("SERIAL NUMBER IS - ", sn))
+	log.V5(fmt.Sprintf("SERIAL NUMBER IS - %v", sn))
 	return sn, nil
 }
 
