@@ -92,6 +92,7 @@ func (c *Capture) detectCameras() error {
 	var vids []int
 	for _, vid := range devs {
 		if strings.Contains(vid.Name(), "video") {
+			fmt.Println(vid.Name())
 			vidNum, err := strconv.Atoi(re.FindAllString(vid.Name(), -1)[0])
 			if err != nil {
 				return fmt.Errorf("failed to convert video filename to int: %v", err)
