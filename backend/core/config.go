@@ -245,7 +245,7 @@ func (cm *ConfigManager) getPlatform() error {
 	} else {
 		cm.Platform = "other"
 	}
-	log.V5("MY PLATFORM IS", cm.Platform)
+	log.V5(fmt.Sprintf("MY PLATFORM IS - %v", cm.Platform))
 	return nil
 }
 
@@ -262,7 +262,7 @@ func (cm *ConfigManager) getSN() (string, error) {
 		return "", fmt.Errorf("failed to get S/N: %v", err)
 	}
 	sn := strings.ReplaceAll(string(res), "\n", "")
-	log.V5("sn", sn)
+	log.V5(fmt.Sprintf("SERIAL NUMBER IS - %v", sn))
 	return sn, nil
 }
 

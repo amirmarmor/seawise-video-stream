@@ -30,9 +30,9 @@ func Create(capture *capture.Capture) *Streamer {
 	}
 }
 
-func (s *Streamer) Stop(capture *capture.Capture) {
-	for _, channel := range capture.Channels {
-		channel.Stream.Close()
-	}
-	s.Cancel()
-}
+//func (s *Streamer) Stop(capture *capture.Capture) {
+//	for _, channel := range capture.Channels {
+//		//channel.Stream.Close()
+//	}
+//	s.Cancel()
+//}
