@@ -6,21 +6,22 @@ import (
 	"www.seawise.com/backend/log"
 )
 
-type ApiInfo = struct {
+type Config = struct {
 	Host string
+	Port int
 }
 
-var Api ApiInfo
+var StreamerConfig Config
 
 func InitFlags() {
-	flag.StringVar(&Api.Host, "apihost", "localhost:5000", "The api host")
-
+	flag.StringVar(&StreamerConfig.Host, "streamer-host", "localhost", "The streamer host")
+	flag.IntVar(&StreamerConfig.Port, "streamer-port", 8000, "The streamer port")
 
 	log.AddNotify(postParse)
 }
 
 func postParse() {
-	marshal, err := json.Marshal(Api)
+	marshal, err := json.Marshal(StreamerConfig)
 	if err != nil {
 		log.Fatal("marshal config failed: %v", err)
 	}

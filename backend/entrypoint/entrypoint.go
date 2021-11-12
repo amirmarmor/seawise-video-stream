@@ -4,18 +4,18 @@ import (
 	"www.seawise.com/backend/capture"
 	"www.seawise.com/backend/core"
 	"www.seawise.com/backend/log"
-	"www.seawise.com/backend/streamer"
+	captureCore "www.seawise.com/backend/capture/core"
 )
 
 type EntryPoint struct {
 	manager  *core.ConfigManager
 	capt     *capture.Capture
-	streamer *streamer.Streamer
 }
 
 func (p *EntryPoint) Run() {
 	core.InitFlags()
 	log.InitFlags()
+	captureCore.InitFlags()
 
 	log.ParseFlags()
 	log.Info("Starting")
@@ -25,14 +25,8 @@ func (p *EntryPoint) Run() {
 	cleanSigTerm := Produce()
 	go p.capt.Start()
 
-	err := p.streamer.Server.ListenAndServe()
-	if err != nil {
-		log.Error("FAILED TO START SERVER", err)
-	}
 
-	//p.streamer.Stop(p.capt)
-
-	cleanSigTerm.WaitForTermination(*p.streamer)
+	cleanSigTerm.WaitForTermination()
 }
 
 func (p *EntryPoint) buildBlocks() {
@@ -45,5 +39,4 @@ func (p *EntryPoint) buildBlocks() {
 	p.capt = capture.Create(p.manager, 5)
 	p.capt.Init()
 
-	p.streamer = streamer.Create(p.capt)
 }

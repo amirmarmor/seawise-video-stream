@@ -1,9 +1,11 @@
 package capture
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/hybridgroup/mjpeg"
 	"gocv.io/x/gocv"
+	"image/jpeg"
 	"os"
 	"reflect"
 	"time"
@@ -19,6 +21,7 @@ type Channel struct {
 	cap            *gocv.VideoCapture
 	image          gocv.Mat
 	writer         *gocv.VideoWriter
+	Queue          chan []byte
 	Record         bool
 	Recording      bool
 	Rules          []core.Rule
@@ -28,6 +31,7 @@ type Channel struct {
 	lastImage      time.Time
 	startRecording time.Time
 	StopChannel    chan string
+	streamer       *Streamer
 }
 
 type Recording struct {
@@ -35,14 +39,18 @@ type Recording struct {
 	startTime   time.Time
 }
 
-func CreateChannel(channel int, rules []core.Rule, fps int) *Channel {
-	return &Channel{
-		name:    channel,
+func CreateChannel(channelName int, rules []core.Rule, fps int) *Channel {
+	channel := &Channel{
+		name:    channelName,
 		Stream:  mjpeg.NewStream(),
 		Rules:   rules,
 		created: time.Now(),
 		fps:     fps,
+		Queue:   make(chan []byte),
 	}
+
+	channel.streamer = CreateStreamer(channel.name, channel.Queue)
+	return channel
 }
 
 func (c *Channel) Init() error {
@@ -139,32 +147,35 @@ func (c *Channel) Read() {
 		}
 	}
 
-	err := c.doStream()
-	if err != nil {
-		log.Warn(fmt.Sprintf("failed to stream: %v", err))
-	}
+	//err := c.doStream()
+	//if err != nil {
+	//	log.Warn(fmt.Sprintf("failed to stream: %v", err))
+	//}
+
+	c.Queue <- c.encodeImage()
+	gocv.WaitKey(1)
 }
 
-func (c *Channel) doStream() error {
-	if c.Recording {
-		log.V5("STOP RECORD")
-	}
-
-	c.Recording = false
-
-	buffer, err := gocv.IMEncode(".jpg", c.image)
-	if err != nil {
-		return fmt.Errorf("read failed to encode: %v", err)
-	}
-
-	c.Stream.UpdateJPEG(buffer.GetBytes())
-	if err != nil {
-		return fmt.Errorf("failed to update stream in read: %v", err)
-	}
-
-	buffer.Close()
-	return nil
-}
+//func (c *Channel) doStream() error {
+//	if c.Recording {
+//		log.V5("STOP RECORD")
+//	}
+//
+//	c.Recording = false
+//
+//	buffer, err := gocv.IMEncode(".jpg", c.image)
+//	if err != nil {
+//		return fmt.Errorf("read failed to encode: %v", err)
+//	}
+//
+//	c.Stream.UpdateJPEG(buffer.GetBytes())
+//	if err != nil {
+//		return fmt.Errorf("failed to update stream in read: %v", err)
+//	}
+//
+//	buffer.Close()
+//	return nil
+//}
 
 func (c *Channel) doRecord() error {
 	if !c.Recording {
@@ -292,6 +303,25 @@ func (c *Channel) checkVideoRules() bool {
 		return true
 	}
 	return false
+}
+
+func (c *Channel) encodeImage() []byte {
+	const jpegQuality = 50
+
+	jpegOption := &jpeg.Options{Quality: jpegQuality}
+
+	image, err := c.image.ToImage()
+	if err != nil {
+		return nil
+	}
+
+	buf := new(bytes.Buffer)
+	err = jpeg.Encode(buf, image, jpegOption)
+	if err != nil {
+		return nil
+	}
+
+	return buf.Bytes()
 }
 
 func GetTimeField(s string, now time.Time) int64 {
