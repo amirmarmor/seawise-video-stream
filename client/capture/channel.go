@@ -9,8 +9,8 @@ import (
 	"os"
 	"reflect"
 	"time"
-	"www.seawise.com/backend/core"
-	"www.seawise.com/backend/log"
+	"www.seawise.com/client/core"
+	"www.seawise.com/common/log"
 )
 
 type Channel struct {
@@ -146,11 +146,6 @@ func (c *Channel) Read() {
 			log.Warn(fmt.Sprintf("fauled to record: %v", err))
 		}
 	}
-
-	//err := c.doStream()
-	//if err != nil {
-	//	log.Warn(fmt.Sprintf("failed to stream: %v", err))
-	//}
 
 	c.Queue <- c.encodeImage()
 	gocv.WaitKey(1)

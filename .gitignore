@@ -1,5 +1,5 @@
 /videos/
 node_modules
-/backend/go1.16.8.linux-armv6l.tar.gz
+/client/go1.16.8.linux-armv6l.tar.gz
 videos
-/backend/start
+/client/start

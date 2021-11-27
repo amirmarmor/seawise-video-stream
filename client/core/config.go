@@ -11,10 +11,10 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"www.seawise.com/backend/log"
+	"www.seawise.com/common/log"
 )
 
-var home = os.Getenv("HOME") + "/seawise-video-stream/backend/"
+var home = os.Getenv("HOME") + "/seawise-video-stream/client/"
 var deviceInfoFile = home + "core/saved/deviceInfo.conf"
 var deviceConfigFile = home + "core/saved/deviceConfig.conf"
 

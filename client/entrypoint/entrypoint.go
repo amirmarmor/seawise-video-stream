@@ -1,14 +1,14 @@
 package entrypoint
 
 import (
-	"fmt"
-	"www.seawise.com/backend/core"
-	"www.seawise.com/backend/server"
+	"www.seawise.com/client/capture"
+	"www.seawise.com/client/core"
 	"www.seawise.com/common/log"
 )
 
 type EntryPoint struct {
-	servers []*server.Server
+	manager  *core.ConfigManager
+	capt     *capture.Capture
 }
 
 func (p *EntryPoint) Run() {
@@ -21,20 +21,20 @@ func (p *EntryPoint) Run() {
 	p.buildBlocks()
 
 	cleanSigTerm := Produce()
+	go p.capt.Start()
 
 
 	cleanSigTerm.WaitForTermination()
 }
 
 func (p *EntryPoint) buildBlocks() {
-	for i := 0; i < 3; i++ {
-		s, err := server.NewServer(i)
-		if err != nil {
-			panic(fmt.Errorf("Failed to create server %v: %v", i, err))
-		}
-		s.Run()
-		p.servers = append(p.servers, s)
-
+	var err error
+	p.manager, err = core.Produce()
+	if err != nil {
+		panic(err)
 	}
-}
 
+	p.capt = capture.Create(p.manager, 5)
+	p.capt.Init()
+
+}

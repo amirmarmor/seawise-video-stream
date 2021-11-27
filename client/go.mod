@@ -1,4 +1,4 @@
-module www.seawise.com/backend
+module www.seawise.com/client
 
 go 1.16
 

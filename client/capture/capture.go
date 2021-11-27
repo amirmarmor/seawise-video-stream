@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"www.seawise.com/backend/core"
-	"www.seawise.com/backend/log"
+	"www.seawise.com/client/core"
+	"www.seawise.com/common/log"
 )
 
 type Capture struct {
