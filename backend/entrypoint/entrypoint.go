@@ -32,7 +32,7 @@ func (p *EntryPoint) buildBlocks() {
 		panic(err)
 	}
 
-	p.servers, err = server.Create(p.devices)
+	p.servers, err = server.CreateListener(p.devices)
 	if err != nil {
 		panic(err)
 	}

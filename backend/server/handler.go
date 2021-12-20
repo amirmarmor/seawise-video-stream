@@ -10,21 +10,21 @@ import (
 	"www.seawise.com/common/log"
 )
 
-func (s *Server) runListener() {
+func (l *Listener) runListener() {
 	for {
-		s.TCPListenerMutex.Lock()
-		s.FrameMutex.Lock()
-		conn, err := s.TCPListener.Accept()
+		l.TCPListenerMutex.Lock()
+		l.FrameMutex.Lock()
+		conn, err := l.TCPListener.Accept()
 		if err != nil {
 			log.Warn(fmt.Sprintf("broken connection: %v", err))
 			continue
 		}
 		//go sendTimeStamp(conn)
-		go s.handleConn(conn)
+		go l.handleConn(conn)
 	}
 }
 
-func (s *Server) handleConn(conn net.Conn) {
+func (l *Listener) handleConn(conn net.Conn) {
 	defer func(conn net.Conn) {
 		err := conn.Close()
 		if err != nil {
@@ -32,14 +32,14 @@ func (s *Server) handleConn(conn net.Conn) {
 		}
 	}(conn)
 
-	defer s.TCPListenerMutex.Unlock()
+	defer l.TCPListenerMutex.Unlock()
 
-	s.FrameMutex.Unlock()
+	l.FrameMutex.Unlock()
 
 	reader := bufio.NewReader(conn)
 
-	timeStamp := make([]byte, s.timeStampPacketSize)
-	contentLength := make([]byte, s.contentLengthPacketSize)
+	timeStamp := make([]byte, l.timeStampPacketSize)
+	contentLength := make([]byte, l.contentLengthPacketSize)
 
 	for {
 		_, err := io.ReadFull(reader, timeStamp)
@@ -63,29 +63,9 @@ func (s *Server) handleConn(conn net.Conn) {
 			break
 		}
 
-		s.FrameMutex.Lock()
-		s.Frame = new(bytes.Buffer)
-		s.Frame.Write(buf)
-		s.FrameMutex.Unlock()
+		l.FrameMutex.Lock()
+		l.Frame = new(bytes.Buffer)
+		l.Frame.Write(buf)
+		l.FrameMutex.Unlock()
 	}
 }
-
-//func sendTimeStamp(conn net.Conn) {
-//	writer := bufio.NewWriter(conn)
-//	for {
-//		time.Sleep(time.Millisecond << 7)
-//
-//		timePkt := make([]byte, core.StreamerConfig.TimeStampPacketSize)
-//		binary.LittleEndian.PutUint64(timePkt, uint64(time.Now().UnixNano()))
-//
-//		_, err := writer.Write(timePkt)
-//		if err != nil {
-//			return
-//		}
-//
-//		err = writer.Flush()
-//		if err != nil {
-//			return
-//		}
-//	}
-//}

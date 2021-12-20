@@ -3,7 +3,7 @@ package server
 import (
 	"bytes"
 	"fmt"
-	"gocv.io/x/gocv"
+	"github.com/hybridgroup/mjpeg"
 	"net"
 	"sync"
 	"www.seawise.com/backend/core"
@@ -11,6 +11,12 @@ import (
 )
 
 type Server struct {
+	Streams   []*Stream
+	Listeners []*Listener
+}
+
+type Stream struct{}
+type Listener struct {
 	TCPListener             net.Listener
 	TCPListenerMutex        sync.Mutex
 	Frame                   *bytes.Buffer
@@ -19,25 +25,26 @@ type Server struct {
 	contentLengthPacketSize uint
 }
 
-func Create(devices *core.Devices) ([]*Server, error) {
-	servers := make([]*Server, 0)
+func Create(devices *core.Devices) (*Server, error) {
+	server := &Server{}
+
 	for _, device := range devices.List {
 		for ch := 0; ch < device.Channels; ch++ {
 			port := core.Config.Port + (device.Id * 10) + ch
-			server, err := NewServer(port)
+			stream := mjpeg.NewStream()
+			listener, err := NewListener(port)
 			if err != nil {
-				return nil, fmt.Errorf("failed to create server - %v", err)
+				return nil, fmt.Errorf("failed to create listener - %v", err)
 			}
-			go server.Run()
-			servers = append(servers, server)
+			go listener.Run(stream)
+			server.Listeners = append(server.Listeners, listener)
 		}
 	}
 
 	return servers, nil
 }
 
-func NewServer(port int) (*Server, error) {
-
+func NewListener(port int) (*Listener, error) {
 	tcpListener, err := net.ListenTCP("tcp", &net.TCPAddr{
 		IP:   net.ParseIP("127.0.0.1"),
 		Port: port,
@@ -49,7 +56,7 @@ func NewServer(port int) (*Server, error) {
 
 	buf := new(bytes.Buffer)
 
-	server := &Server{
+	server := &Listener{
 		TCPListener:             tcpListener,
 		TCPListenerMutex:        sync.Mutex{},
 		Frame:                   buf,
@@ -61,27 +68,20 @@ func NewServer(port int) (*Server, error) {
 	return server, nil
 }
 
-func (s *Server) Run() {
+func (l *Listener) Run(stream *mjpeg.Stream) {
 	defer func(tcpListener net.Listener) {
 		err := tcpListener.Close()
 		if err != nil {
 			panic(err)
 		}
-	}(s.TCPListener)
+	}(l.TCPListener)
 
-	go s.runListener()
+	go l.runListener()
 
-	window := gocv.NewWindow("Streaming")
+	//window := gocv.NewWindow("Streaming")
 	for {
-		s.FrameMutex.RLock()
-		mat, err := gocv.IMDecode(s.Frame.Bytes(), gocv.IMReadUnchanged)
-		if err != nil {
-			s.FrameMutex.RUnlock()
-			continue
-		}
-		s.FrameMutex.RUnlock()
-		window.IMShow(mat)
-		window.WaitKey(1)
-		_ = mat.Close()
+		l.FrameMutex.RLock()
+		stream.UpdateJPEG(l.Frame.Bytes())
+		l.FrameMutex.RUnlock()
 	}
 }
