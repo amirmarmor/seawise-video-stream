@@ -1,4 +1,4 @@
-package backend
+package main
 
 import (
 	"www.seawise.com/backend/entrypoint"

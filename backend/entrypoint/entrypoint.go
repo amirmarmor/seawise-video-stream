@@ -1,7 +1,6 @@
 package entrypoint
 
 import (
-	"fmt"
 	"www.seawise.com/backend/core"
 	"www.seawise.com/backend/server"
 	"www.seawise.com/common/log"
@@ -9,6 +8,7 @@ import (
 
 type EntryPoint struct {
 	servers []*server.Server
+	devices *core.Devices
 }
 
 func (p *EntryPoint) Run() {
@@ -22,19 +22,22 @@ func (p *EntryPoint) Run() {
 
 	cleanSigTerm := Produce()
 
-
 	cleanSigTerm.WaitForTermination()
 }
 
 func (p *EntryPoint) buildBlocks() {
-	for i := 0; i < 3; i++ {
-		s, err := server.NewServer(i)
-		if err != nil {
-			panic(fmt.Errorf("Failed to create server %v: %v", i, err))
-		}
-		s.Run()
-		p.servers = append(p.servers, s)
+	var err error
+	p.devices, err = core.Produce()
+	if err != nil {
+		panic(err)
+	}
 
+	p.servers, err = server.Create(p.devices)
+	if err != nil {
+		panic(err)
 	}
 }
 
+func (p *EntryPoint) startListening() {
+
+}

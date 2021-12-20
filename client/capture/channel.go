@@ -17,6 +17,7 @@ type Channel struct {
 	run            bool
 	created        time.Time
 	name           int
+	port           int
 	init           bool
 	cap            *gocv.VideoCapture
 	image          gocv.Mat
@@ -39,9 +40,10 @@ type Recording struct {
 	startTime   time.Time
 }
 
-func CreateChannel(channelName int, rules []core.Rule, fps int) *Channel {
+func CreateChannel(device int, channelName int, rules []core.Rule, fps int) *Channel {
 	channel := &Channel{
 		name:    channelName,
+		port:    core.Hosts.StreamPort + (device * 10) + channelName,
 		Stream:  mjpeg.NewStream(),
 		Rules:   rules,
 		created: time.Now(),
@@ -49,7 +51,6 @@ func CreateChannel(channelName int, rules []core.Rule, fps int) *Channel {
 		Queue:   make(chan []byte),
 	}
 
-	channel.streamer = CreateStreamer(channel.name, channel.Queue)
 	return channel
 }
 
@@ -76,6 +77,10 @@ func (c *Channel) Init() error {
 	c.run = true
 
 	return nil
+}
+
+func (c *Channel) InitStreamer() {
+	c.streamer = CreateStreamer(c.port, c.Queue)
 }
 
 func (c *Channel) close() error {
@@ -286,7 +291,7 @@ func (c *Channel) checkVideoRules() bool {
 
 		bar := GetTimeField(rule.Recurring, now)
 
-		if rule.Start == bar {
+		if rule.Start == uint(bar) {
 			c.startRecording = now
 		}
 

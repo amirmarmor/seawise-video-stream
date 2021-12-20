@@ -7,33 +7,40 @@ import (
 	"net"
 	"sync"
 	"www.seawise.com/backend/core"
+	"www.seawise.com/common/log"
 )
 
 type Server struct {
-	TCPListener      net.Listener
-	TCPListenerMutex sync.Mutex
-	Frame            *bytes.Buffer
-	FrameMutex       sync.RWMutex
+	TCPListener             net.Listener
+	TCPListenerMutex        sync.Mutex
+	Frame                   *bytes.Buffer
+	FrameMutex              sync.RWMutex
+	timeStampPacketSize     uint
+	contentLengthPacketSize uint
 }
 
-func Create(channels int) ([]*Server, error){
-	sockets := make([]*Server, 0)
-	for i := 0; i < channels; i++ {
-		socket, err := NewServer(i)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create new server for channel %v: %v", i, err)
+func Create(devices *core.Devices) ([]*Server, error) {
+	servers := make([]*Server, 0)
+	for _, device := range devices.List {
+		for ch := 0; ch < device.Channels; ch++ {
+			port := core.Config.Port + (device.Id * 10) + ch
+			server, err := NewServer(port)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create server - %v", err)
+			}
+			go server.Run()
+			servers = append(servers, server)
 		}
-
-		sockets = append(sockets, socket)
 	}
 
-	return sockets, nil
+	return servers, nil
 }
 
-func NewServer(channel int) (*Server, error) {
+func NewServer(port int) (*Server, error) {
+
 	tcpListener, err := net.ListenTCP("tcp", &net.TCPAddr{
-		IP:   net.ParseIP(core.StreamerConfig.Host),
-		Port: core.StreamerConfig.Port + channel,
+		IP:   net.ParseIP("127.0.0.1"),
+		Port: port,
 	})
 
 	if err != nil {
@@ -43,12 +50,14 @@ func NewServer(channel int) (*Server, error) {
 	buf := new(bytes.Buffer)
 
 	server := &Server{
-		TCPListener:      tcpListener,
-		TCPListenerMutex: sync.Mutex{},
-		Frame:            buf,
-		FrameMutex:       sync.RWMutex{},
+		TCPListener:             tcpListener,
+		TCPListenerMutex:        sync.Mutex{},
+		Frame:                   buf,
+		FrameMutex:              sync.RWMutex{},
+		timeStampPacketSize:     8,
+		contentLengthPacketSize: 8,
 	}
-
+	log.V5(fmt.Sprintf("Listening on 127.0.0.1:%v", port))
 	return server, nil
 }
 

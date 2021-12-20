@@ -1,0 +1,8 @@
+github.com/hybridgroup/mjpeg v0.0.0-20140228234708-4680f319790e h1:xCcwD5FOXul+j1dn8xD16nbrhJkkum/Cn+jTd/u1LhY=
+github.com/hybridgroup/mjpeg v0.0.0-20140228234708-4680f319790e/go.mod h1:eagM805MRKrioHYuU7iKLUyFPVKqVV6um5DAvCkUtXs=
+github.com/namsral/flag v1.7.4-pre h1:b2ScHhoCUkbsq0d2C15Mv+VU8bl8hAXV8arnWiOHNZs=
+github.com/namsral/flag v1.7.4-pre/go.mod h1:OXldTctbM6SWH1K899kPZcf65KxJiD7MsceFUpB5yDo=
+github.com/pascaldekloe/goe v0.1.0/go.mod h1:lzWF7FIEvWOWxwDKqyGYQf6ZUaNfKdP144TG7ZOy1lc=
+gocv.io/x/gocv v0.28.0/go.mod h1:oc6FvfYqfBp99p+yOEzs9tbYF9gOrAQSeL/dyIPefJU=
+gocv.io/x/gocv v0.29.0 h1:Zg5ZoIFSY4oBehoIRoSaSeY+KF+nvqv1O1qNmALiMec=
+gocv.io/x/gocv v0.29.0/go.mod h1:oc6FvfYqfBp99p+yOEzs9tbYF9gOrAQSeL/dyIPefJU=

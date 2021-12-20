@@ -50,14 +50,16 @@ type Configuration struct {
 type ConfigManager struct {
 	Info     *DeviceInfo
 	Config   *Configuration
+	Backend  string
+	Stream   string
 	Platform string
 }
 
 type Rule struct {
-	Id        int64  `json:"id"`
+	Id        uint   `json:"id"`
 	Recurring string `json:"recurring"`
-	Start     int64  `json:"start,string"`
-	Duration  int64  `json:"dgetIpuration,string"`
+	Start     uint   `json:"start"`
+	Duration  uint   `json:"duration,string"`
 	Type      string `json:"type"`
 }
 
@@ -67,9 +69,12 @@ type IP struct {
 }
 
 func Produce() (*ConfigManager, error) {
-	manager := ConfigManager{}
+	manager := ConfigManager{
+		Backend: "http://" + Hosts.Backend + ":" + strconv.Itoa(Hosts.BackendPort),
+		Stream:  "http://" + Hosts.Stream + ":" + strconv.Itoa(Hosts.StreamPort),
+	}
 
-	log.V5("REGISTERING DEVICE - " + Api.Host)
+	log.V5("REGISTERING DEVICE - " + manager.Backend)
 
 	err := manager.Register()
 	if err != nil {
@@ -92,7 +97,7 @@ func (cm *ConfigManager) GetConfig() error {
 
 	var body []byte
 
-	resp, err := http.Get("http://" + Api.Host + "/api/device/" + strconv.Itoa(cm.Info.Id))
+	resp, err := http.Get(cm.Backend + "/api/device/" + strconv.Itoa(cm.Info.Id))
 
 	if err != nil || resp.StatusCode != 200 {
 		log.Warn(fmt.Sprintf("failed to get Configuration from remote using local: %v", err))
@@ -123,16 +128,6 @@ func (cm *ConfigManager) GetConfig() error {
 	return nil
 }
 
-//func (cm *ConfigManager) SetConfig() error {
-//
-//	cm.Config.RecordNow = falsedefer resp.Body.Close()
-//	cm.Config.Cleanup = true
-//	cm.Config.Fps = 30
-//	cm.Config.Rules = "[]"
-//
-//	return nil
-//}
-
 func (cm *ConfigManager) UpdateDeviceInfo(channels int) error {
 	ip, err := cm.getIp()
 	if err != nil {
@@ -147,7 +142,7 @@ func (cm *ConfigManager) UpdateDeviceInfo(channels int) error {
 		return fmt.Errorf("failed to marshal register requets: %v", err)
 	}
 
-	body, err := cm.post("http://"+Api.Host+"/api/registration/update", postBody)
+	body, err := cm.post(cm.Backend+"/api/registration/update", postBody)
 	if err != nil {
 		return fmt.Errorf("failed to update registration: %v", err)
 	}
@@ -189,10 +184,9 @@ func (cm *ConfigManager) Register() error {
 		return fmt.Errorf("failed to marshal register requets: %v", err)
 	}
 
-	apiUrl := "http://" + Api.Host + "/api/register"
-	log.V5(apiUrl)
+	log.V5(cm.Backend)
 	var body []byte
-	body, err = cm.post(apiUrl, postBody)
+	body, err = cm.post(cm.Backend+"/api/register", postBody)
 	if err != nil {
 		log.Warn(fmt.Sprintf("failed to register device no connectivity, looking to saved info: %v", err))
 		body, err = ioutil.ReadFile(deviceInfoFile)
@@ -204,7 +198,6 @@ func (cm *ConfigManager) Register() error {
 		if err != nil {
 			return fmt.Errorf("failed to write info EXITING: %v", err)
 		}
-
 	}
 
 	response := &RegisterResponse{}

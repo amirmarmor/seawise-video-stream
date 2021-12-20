@@ -12,14 +12,18 @@ import (
 
 type Streamer struct {
 	TCPConn                 *net.TCPConn
-	offset                  int
+	port                    int
 	queue                   chan []byte
+	timeStampPacketSize     uint
+	contentLengthPacketSize uint
 }
 
-func CreateStreamer(offset int, queue chan []byte) *Streamer {
+func CreateStreamer(port int, queue chan []byte) *Streamer {
 	streamer := &Streamer{
 		queue:                   queue,
-		offset:                  offset,
+		port:                    port,
+		timeStampPacketSize:     8,
+		contentLengthPacketSize: 8,
 	}
 
 	streamer.connect()
@@ -28,8 +32,8 @@ func CreateStreamer(offset int, queue chan []byte) *Streamer {
 
 func (s *Streamer) connect() {
 	conn, err := net.DialTCP("tcp", nil, &net.TCPAddr{
-		IP:   net.ParseIP(core.Api.StreamerHost),
-		Port: core.Api.StreamerPort + s.offset,
+		IP:   net.ParseIP(core.Hosts.Stream),
+		Port: s.port,
 	})
 
 	if err != nil {
@@ -63,10 +67,10 @@ func (s *Streamer) pack(frame []byte) []byte {
 	// content (content-length bytes)
 	// ------  End   ------
 
-	timePkt := make([]byte, core.Api.TimeStampPacketSize)
+	timePkt := make([]byte, s.timeStampPacketSize)
 	binary.LittleEndian.PutUint64(timePkt, uint64(time.Now().UnixNano()))
 
-	contentLengthPkt := make([]byte, core.Api.ContentLengthPacketSize)
+	contentLengthPkt := make([]byte, s.contentLengthPacketSize)
 	binary.LittleEndian.PutUint64(contentLengthPkt, uint64(len(frame)))
 
 	var pkt []byte

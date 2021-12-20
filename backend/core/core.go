@@ -6,28 +6,27 @@ import (
 	"www.seawise.com/common/log"
 )
 
-type Config = struct {
-	Host                    string
-	Port                    int
-	TimeStampPacketSize     int
-	ContentLengthPacketSize int
-	HeadPacketSize          int
+type Configuration = struct {
+	Port        int
+	BackendHost string
+	BackendPort int
+	//TimeStampPacketSize     int
+	//ContentLengthPacketSize int
+	//HeadPacketSize          int
 }
 
-var StreamerConfig Config
+var Config Configuration
 
 func InitFlags() {
-	flag.StringVar(&StreamerConfig.Host, "streamer-host", "localhost", "The streamer host")
-	flag.IntVar(&StreamerConfig.Port, "streamer-port", 8000, "The streamer port")
-	flag.IntVar(&StreamerConfig.TimeStampPacketSize, "timestamp-packet-size", 8, "Timestamp packet size")
-	flag.IntVar(&StreamerConfig.ContentLengthPacketSize, "content-length-packet-size", 8, "content length packet size")
-	flag.IntVar(&StreamerConfig.HeadPacketSize, "head-packet-size", 64, "head packet size")
+	flag.IntVar(&Config.Port, "port", 8000, "The stream port start")
+	flag.IntVar(&Config.BackendPort, "backend-port", 5000, "The backend port")
+	flag.StringVar(&Config.BackendHost, "backend-Host", "localhost", "The backend port")
 
 	log.AddNotify(postParse)
 }
 
 func postParse() {
-	marshal, err := json.Marshal(StreamerConfig)
+	marshal, err := json.Marshal(Config)
 	if err != nil {
 		log.Fatal("marshal config failed: %v", err)
 	}

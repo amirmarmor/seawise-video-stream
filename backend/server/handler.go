@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"time"
-	"www.seawise.com/backend/core"
 	"www.seawise.com/common/log"
 )
 
@@ -21,7 +19,7 @@ func (s *Server) runListener() {
 			log.Warn(fmt.Sprintf("broken connection: %v", err))
 			continue
 		}
-		go sendTimeStamp(conn)
+		//go sendTimeStamp(conn)
 		go s.handleConn(conn)
 	}
 }
@@ -30,7 +28,7 @@ func (s *Server) handleConn(conn net.Conn) {
 	defer func(conn net.Conn) {
 		err := conn.Close()
 		if err != nil {
-			log.Warn(fmt.Sprintf("tcp conn close failed! - %v",err))
+			log.Warn(fmt.Sprintf("tcp conn close failed! - %v", err))
 		}
 	}(conn)
 
@@ -40,8 +38,8 @@ func (s *Server) handleConn(conn net.Conn) {
 
 	reader := bufio.NewReader(conn)
 
-	timeStamp := make([]byte, core.StreamerConfig.TimeStampPacketSize)
-	contentLength := make([]byte, core.StreamerConfig.ContentLengthPacketSize)
+	timeStamp := make([]byte, s.timeStampPacketSize)
+	contentLength := make([]byte, s.contentLengthPacketSize)
 
 	for {
 		_, err := io.ReadFull(reader, timeStamp)
@@ -72,22 +70,22 @@ func (s *Server) handleConn(conn net.Conn) {
 	}
 }
 
-func sendTimeStamp(conn net.Conn) {
-	writer := bufio.NewWriter(conn)
-	for {
-		time.Sleep(time.Millisecond << 7)
-
-		timePkt := make([]byte, core.StreamerConfig.TimeStampPacketSize)
-		binary.LittleEndian.PutUint64(timePkt, uint64(time.Now().UnixNano()))
-
-		_, err := writer.Write(timePkt)
-		if err != nil {
-			return
-		}
-
-		err = writer.Flush()
-		if err != nil {
-			return
-		}
-	}
-}
+//func sendTimeStamp(conn net.Conn) {
+//	writer := bufio.NewWriter(conn)
+//	for {
+//		time.Sleep(time.Millisecond << 7)
+//
+//		timePkt := make([]byte, core.StreamerConfig.TimeStampPacketSize)
+//		binary.LittleEndian.PutUint64(timePkt, uint64(time.Now().UnixNano()))
+//
+//		_, err := writer.Write(timePkt)
+//		if err != nil {
+//			return
+//		}
+//
+//		err = writer.Flush()
+//		if err != nil {
+//			return
+//		}
+//	}
+//}

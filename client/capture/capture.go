@@ -53,8 +53,16 @@ func (c *Capture) Init() error {
 		return fmt.Errorf("failed to update registration: %v", err)
 	}
 
+	c.startStreamers()
+
 	go c.updateConfig()
 	return nil
+}
+
+func (c *Capture) startStreamers() {
+	for _, channel := range c.Channels {
+		channel.InitStreamer()
+	}
 }
 
 func (c *Capture) updateConfig() {
@@ -92,7 +100,7 @@ func (c *Capture) detectCameras() error {
 	var vids []int
 	for _, vid := range devs {
 		if strings.Contains(vid.Name(), "video") {
-			fmt.Println(vid.Name())
+			log.V5(vid.Name())
 			vidNum, err := strconv.Atoi(re.FindAllString(vid.Name(), -1)[0])
 			if err != nil {
 				return fmt.Errorf("failed to convert video filename to int: %v", err)
@@ -105,11 +113,11 @@ func (c *Capture) detectCameras() error {
 
 	i := 0
 	for i < c.attempts {
-		log.V5(fmt.Sprintf("Attemting to start channel - %v / %v", i, c.attempts))
+		log.V5(fmt.Sprintf("Attempting to start channel - %v / %v", i, c.attempts))
 		c.Channels = make([]*Channel, 0)
 		for _, num := range vids {
 			if num >= c.manager.Config.Offset {
-				channel := CreateChannel(num, c.rules, c.manager.Config.Fps)
+				channel := CreateChannel(c.manager.Config.Id, num, c.rules, c.manager.Config.Fps)
 				err := channel.Init()
 				if err != nil {
 					continue
