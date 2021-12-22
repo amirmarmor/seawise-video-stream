@@ -83,11 +83,6 @@ func (c *Capture) updateChannels() {
 		log.Warn(fmt.Sprintf("Failed to update configuration: %v", err))
 		return
 	}
-
-	for _, channel := range c.Channels {
-		channel.Rules = c.rules
-		channel.Record = c.manager.Config.RecordNow
-	}
 }
 
 func (c *Capture) detectCameras() error {
