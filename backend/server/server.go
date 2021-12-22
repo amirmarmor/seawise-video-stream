@@ -6,6 +6,7 @@ import (
 	"github.com/hybridgroup/mjpeg"
 	"net"
 	"net/http"
+	"strconv"
 	"sync"
 	"www.seawise.com/backend/core"
 	"www.seawise.com/common/log"
@@ -20,6 +21,8 @@ type Server struct {
 	contentLengthPacketSize uint
 	Stream                  *mjpeg.Stream
 	Port                    int
+	Ip                      string
+	Channel                 int
 }
 
 func Create(devices *core.Devices) ([]*Server, error) {
@@ -27,7 +30,7 @@ func Create(devices *core.Devices) ([]*Server, error) {
 	for _, device := range devices.List {
 		for ch := 0; ch < device.Channels; ch++ {
 			port := core.Config.Port + (device.Id * 10) + ch
-			server, err := NewServer(port)
+			server, err := NewServer(port, device.Ip, ch)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create listener - %v", err)
 			}
@@ -41,7 +44,7 @@ func Create(devices *core.Devices) ([]*Server, error) {
 	return servers, nil
 }
 
-func NewServer(port int) (*Server, error) {
+func NewServer(port int, ip string, ch int) (*Server, error) {
 	tcpListener, err := net.ListenTCP("tcp", &net.TCPAddr{
 		IP:   net.ParseIP("127.0.0.1"),
 		Port: port,
@@ -62,6 +65,8 @@ func NewServer(port int) (*Server, error) {
 		contentLengthPacketSize: 8,
 		Stream:                  mjpeg.NewStream(),
 		Port:                    port,
+		Ip:                      ip,
+		Channel:                 ch,
 	}
 	log.V5(fmt.Sprintf("Listening on 127.0.0.1:%v", port))
 	return server, nil
@@ -85,8 +90,22 @@ func (s *Server) Run() {
 }
 
 func (s *Server) HandleOutbound(w http.ResponseWriter, r *http.Request) {
-	log.V5("CONNN")
+	url := "http://" + s.Ip + ":" + strconv.Itoa(core.Config.DevicesPort)
+
+	log.V5(fmt.Sprintf("Starting - %v, channel - %v", s.Ip, s.Channel))
+
+	_, err := http.Get(url + "/start/" + strconv.Itoa(s.Channel))
+	if err != nil {
+		log.Warn(fmt.Sprintf("Failed to start device - %v", s.Port))
+	}
+
 	s.Stream.ServeHTTP(w, r)
+
+	_, err = http.Get(url + "/stop/" + strconv.Itoa(s.Channel))
+	if err != nil {
+		log.Warn(fmt.Sprintf("Failed to stop device - %v", s.Port))
+	}
+	log.V5(fmt.Sprintf("Stopping - %v, channel - %v", s.Ip, s.Channel))
 }
 
 //if imageRecord {

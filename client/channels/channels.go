@@ -2,7 +2,6 @@ package channels
 
 import (
 	"fmt"
-	"gocv.io/x/gocv"
 	"os"
 	"regexp"
 	"strconv"
@@ -14,6 +13,7 @@ type Channels struct {
 	counter  int
 	Array    []*Channel
 	attempts int
+	Started  []bool
 }
 
 func Create(attempts int) (*Channels, error) {
@@ -68,6 +68,7 @@ func (c *Channels) DetectCameras() error {
 				continue
 			} else {
 				c.Array = append(c.Array, channel)
+				c.Started = append(c.Started, false)
 			}
 		}
 
@@ -81,20 +82,19 @@ func (c *Channels) DetectCameras() error {
 	return nil
 }
 
-func (c *Channels) Start(fps int, offset int, id int) {
-	for i, ch := range c.Array {
-
-		if ch.name >= offset {
-			ch.Ready(fps, id, i)
-			go ch.Start()
-		}
-		gocv.WaitKey(1)
+func (c *Channels) Start(fps int, num int, id int) {
+	if !c.Started[num] {
+		c.Array[num].Ready(fps, id, num)
+		go c.Array[num].Start()
+		log.V5(fmt.Sprintf("Started channel - %v", num))
+		c.Started[num] = true
 	}
-	log.V5(fmt.Sprintf("Started channels"))
 }
 
-func (c *Channels) Stop() {
-	for _, ch := range c.Array {
-		ch.StopChannel <- "stop"
+func (c *Channels) Stop(num int) {
+	if c.Started[num] {
+		c.Array[num].StopChannel <- "stop"
+		c.Started[num] = false
+		log.V5(fmt.Sprintf("Stopped channel - %v", num))
 	}
 }

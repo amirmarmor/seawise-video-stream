@@ -9,8 +9,9 @@ import (
 )
 
 type Device struct {
-	Id       int `json:"id,string"`
-	Channels int `json:"channels,string"`
+	Id       int    `json:"id,string"`
+	Channels int    `json:"channels,string"`
+	Ip       string `json:"ip"`
 }
 
 type Devices struct {

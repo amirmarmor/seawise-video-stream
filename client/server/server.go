@@ -25,12 +25,8 @@ type DeviceInfo struct {
 	Sn       string `json:"sn"`
 	Owner    string `json:"owner"`
 	Id       int    `json:"id"`
-	Ip       *IP    `json:"ip"`
+	Ip       string `json:"ip"`
 	Channels int    `json:"channels"`
-}
-
-type IPIFYResponse struct {
-	Ip string `json:"ip"`
 }
 
 type RegisterResponse struct {
@@ -46,11 +42,6 @@ type Configuration struct {
 	Offset  int  `json:"offset"`
 	Cleanup bool `json:"cleanup"`
 	Fps     int  `json:"fps"`
-}
-
-type IP struct {
-	Local    string `json:"local"`
-	External string `json:"external"`
 }
 
 type Server struct {
@@ -82,7 +73,8 @@ func Produce(channels *channels.Channels) (*Server, error) {
 	}
 
 	server.Router = mux.NewRouter()
-	server.Router.HandleFunc("/{action}", server.Handler)
+	server.Router.HandleFunc("/start/{num}", server.StartHandler)
+	server.Router.HandleFunc("/stop/{num}", server.StopHandler)
 	server.Router.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
 		_, err := writer.Write([]byte("ok"))
 		if err != nil {
@@ -236,49 +228,51 @@ func (s *Server) getSN() (string, error) {
 	return sn, nil
 }
 
-func (s *Server) getIp() (*IP, error) {
+func (s *Server) getIp() (string, error) {
 	if s.Platform != "pi" {
-		return &IP{"127.0.0.1", "127.0.0.1"}, nil
+		return "127.0.0.1", nil
 	}
+
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get IP: %v", err)
+		return "", fmt.Errorf("failed to get IP: %v", err)
 	}
 	defer conn.Close()
 
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 
-	resp, err := http.Get("https://api.ipify.org?format=json")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get external IP: %v", err)
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	ipJson := &IPIFYResponse{}
-	err = json.Unmarshal(body, ipJson)
-
-	return &IP{
-		localAddr.IP.String(),
-		ipJson.Ip,
-	}, nil
+	return localAddr.IP.String(), nil
 }
 
-func (s *Server) Handler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) StartHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	response := "ok"
-	switch action := vars["action"]; action {
-	case "start":
-		go s.Channels.Start(s.Configuration.Fps, s.Configuration.Offset, s.Configuration.Id)
+	cam, err := strconv.Atoi(vars["num"])
+	var response string
+	if err != nil || cam > s.DeviceInfo.Channels {
+		response = fmt.Sprintf("Invalid camera number - %v", cam)
+		log.Warn(response)
+	} else {
+		go s.Channels.Start(s.Configuration.Fps, cam, s.Configuration.Id)
 		response = "starting..."
-	case "stop":
-		go s.Channels.Stop()
+	}
+	_, err = w.Write([]byte(response))
+	if err != nil {
+		panic(err)
+	}
+}
+
+func (s *Server) StopHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	cam, err := strconv.Atoi(vars["num"])
+	var response string
+	if err != nil || cam > s.DeviceInfo.Channels {
+		response = fmt.Sprintf("Invalid camera number - %v", cam)
+		log.Warn(response)
+	} else {
+		go s.Channels.Stop(cam)
 		response = "stopping..."
 	}
-	_, err := w.Write([]byte(response))
+	_, err = w.Write([]byte(response))
 	if err != nil {
 		panic(err)
 	}
