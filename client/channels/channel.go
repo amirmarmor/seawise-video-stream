@@ -1,9 +1,8 @@
-package capture
+package channels
 
 import (
 	"bytes"
 	"fmt"
-	"github.com/hybridgroup/mjpeg"
 	"gocv.io/x/gocv"
 	"image/jpeg"
 	"time"
@@ -12,21 +11,14 @@ import (
 )
 
 type Channel struct {
-	run            bool
-	created        time.Time
-	name           int
-	port           int
-	init           bool
-	capture        *gocv.VideoCapture
-	image          gocv.Mat
-	Queue          chan []byte
-	path           string
-	Stream         *mjpeg.Stream
-	fps            int
-	lastImage      time.Time
-	startRecording time.Time
-	StopChannel    chan string
-	streamer       *Streamer
+	fps         int
+	name        int
+	init        bool
+	capture     *gocv.VideoCapture
+	image       gocv.Mat
+	Queue       chan []byte
+	StopChannel chan string
+	streamer    *Streamer
 }
 
 type Recording struct {
@@ -34,25 +26,22 @@ type Recording struct {
 	startTime   time.Time
 }
 
-func CreateChannel(device int, count int, channelName int, rules []core.Rule, fps int) *Channel {
+func CreateChannel(channelName int) *Channel {
 	channel := &Channel{
-		name:    channelName,
-		port:    core.Hosts.StreamPort + (device * 10) + count,
-		Stream:  mjpeg.NewStream(),
-		created: time.Now(),
-		fps:     fps,
-		Queue:   make(chan []byte),
+		name:        channelName,
+		Queue:       make(chan []byte),
+		StopChannel: make(chan string),
 	}
 
 	return channel
 }
 
-func (c *Channel) Init() error {
+func (c *Channel) Init(detectOnly bool) error {
 	vc, err := gocv.OpenVideoCapture(c.name)
 	if err != nil {
 		return fmt.Errorf("Init failed to capture video %v: ", err)
 	}
-	vc.Set(gocv.VideoCaptureFPS, float64(c.fps))
+
 	vc.Set(gocv.VideoCaptureFrameWidth, 1920)
 	vc.Set(gocv.VideoCaptureFrameHeight, 1080)
 	vc.Set(gocv.VideoCaptureBufferSize, 5)
@@ -63,34 +52,60 @@ func (c *Channel) Init() error {
 		return fmt.Errorf("Init failed to read")
 	}
 
+	c.init = true
+
+	if detectOnly {
+		err := vc.Close()
+		if err != nil {
+			return fmt.Errorf("failed to close vc in camera detection phase: %v", err)
+		}
+
+		err = img.Close()
+		if err != nil {
+			return fmt.Errorf("failed to close mat in camera detection phase: %v", err)
+		}
+
+		return nil
+	}
+
 	c.capture = vc
 	c.image = img
-	c.init = true
-	c.run = true
 
 	return nil
 }
 
-func (c *Channel) InitStreamer() {
-	c.streamer = CreateStreamer(c.port, c.Queue)
+func (c *Channel) Ready(fps int, id int, count int) {
+	port := core.Hosts.StreamPort + (id * 10) + count
+	c.fps = fps
+
+	if c.streamer == nil {
+		c.streamer = CreateStreamer(port, c.Queue)
+	}
+
+	err := c.Init(false)
+	if err != nil {
+		log.Warn(fmt.Sprintf("failed to init: %v", err))
+	}
 }
 
-func (c *Channel) close() error {
+func (c *Channel) close() {
 	err := c.capture.Close()
 	if err != nil {
-		return fmt.Errorf("failed to close capture: %v", err)
+		log.Warn(fmt.Sprintf("failed to close capture: %v", err))
 	}
 	err = c.image.Close()
 	if err != nil {
-		return fmt.Errorf("failed to close image: %v", err)
+		log.Warn(fmt.Sprintf("failed to close image: %v", err))
 	}
 
+	//c.streamer.Stop()
+
 	c.init = false
-	return nil
+	log.V5("stopped....")
 }
 
 func (c *Channel) Start() {
-	for c.run {
+	for c.init {
 		select {
 		case <-c.StopChannel:
 			c.close()
@@ -98,7 +113,6 @@ func (c *Channel) Start() {
 			c.Read()
 		}
 	}
-	c.StopChannel <- "restarting"
 }
 
 func (c *Channel) getImage() error {
@@ -116,12 +130,13 @@ func (c *Channel) getImage() error {
 
 func (c *Channel) Read() {
 	if !c.init {
-		err := c.Init()
+		err := c.Init(false)
 		if err != nil {
 			log.Warn(fmt.Sprintf("read init failed to close: %v", err))
-			c.run = false
 		}
 	}
+
+	c.capture.Set(gocv.VideoCaptureFPS, float64(c.fps))
 
 	err := c.getImage()
 	if err != nil {

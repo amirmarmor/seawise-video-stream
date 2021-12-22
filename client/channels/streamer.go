@@ -1,9 +1,10 @@
-package capture
+package channels
 
 import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
+	"github.com/gorilla/mux"
 	"net"
 	"time"
 	"www.seawise.com/client/core"
@@ -16,6 +17,7 @@ type Streamer struct {
 	queue                   chan []byte
 	timeStampPacketSize     uint
 	contentLengthPacketSize uint
+	Router                  *mux.Router
 }
 
 func CreateStreamer(port int, queue chan []byte) *Streamer {
@@ -81,9 +83,9 @@ func (s *Streamer) pack(frame []byte) []byte {
 	return pkt
 }
 
-//func (s *Streamer) Stop(capture *capture.Capture) {
-//	for _, channel := range capture.Channels {
-//		//channel.Stream.Close()
-//	}
-//	s.Cancel()
-//}
+func (s *Streamer) Stop() {
+	err := s.TCPConn.Close()
+	if err != nil {
+		log.Warn(fmt.Sprintf("Failed to close socket: %v", err))
+	}
+}

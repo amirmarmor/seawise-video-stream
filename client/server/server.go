@@ -1,9 +1,10 @@
-package core
+package server
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/gorilla/mux"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -11,6 +12,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"www.seawise.com/client/channels"
+	"www.seawise.com/client/core"
 	"www.seawise.com/common/log"
 )
 
@@ -39,28 +42,10 @@ type MessageResponse struct {
 }
 
 type Configuration struct {
-	Id        int    `json:"id"`
-	Offset    int    `json:"offset"`
-	Cleanup   bool   `json:"cleanup"`
-	Fps       int    `json:"fps"`
-	RecordNow bool   `json:"record"`
-	Rules     string `json:"rules"`
-}
-
-type ConfigManager struct {
-	Info     *DeviceInfo
-	Config   *Configuration
-	Backend  string
-	Stream   string
-	Platform string
-}
-
-type Rule struct {
-	Id        uint   `json:"id"`
-	Recurring string `json:"recurring"`
-	Start     uint   `json:"start"`
-	Duration  uint   `json:"duration,string"`
-	Type      string `json:"type"`
+	Id      int  `json:"id"`
+	Offset  int  `json:"offset"`
+	Cleanup bool `json:"cleanup"`
+	Fps     int  `json:"fps"`
 }
 
 type IP struct {
@@ -68,36 +53,54 @@ type IP struct {
 	External string `json:"external"`
 }
 
-func Produce() (*ConfigManager, error) {
-	manager := ConfigManager{
-		Backend: "http://" + Hosts.Backend + ":" + strconv.Itoa(Hosts.BackendPort),
-		Stream:  "http://" + Hosts.Stream + ":" + strconv.Itoa(Hosts.StreamPort),
+type Server struct {
+	Backend       string
+	DeviceInfo    *DeviceInfo
+	Configuration *Configuration
+	Router        *mux.Router
+	Channels      *channels.Channels
+	Platform      string
+}
+
+func Produce(channels *channels.Channels) (*Server, error) {
+
+	server := &Server{
+		Backend:  "http://" + core.Hosts.Backend + ":" + strconv.Itoa(core.Hosts.BackendPort),
+		Channels: channels,
 	}
 
-	log.V5("REGISTERING DEVICE - " + manager.Backend)
+	log.V5("REGISTERING DEVICE - " + server.Backend)
 
-	err := manager.Register()
+	err := server.Register(len(channels.Array))
 	if err != nil {
 		return nil, err
 	}
 
-	err = manager.GetConfig()
+	err = server.GetConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get configuration: %v", err)
 	}
 
-	return &manager, nil
+	server.Router = mux.NewRouter()
+	server.Router.HandleFunc("/{action}", server.Handler)
+	server.Router.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
+		_, err := writer.Write([]byte("ok"))
+		if err != nil {
+			log.Warn(fmt.Sprintf("unable to write response on health check: %v", err))
+		}
+	})
+	return server, nil
 }
 
-func (cm *ConfigManager) GetConfig() error {
-	cm.Config = &Configuration{
+func (s *Server) GetConfig() error {
+	s.Configuration = &Configuration{
 		Offset: 0,
-		Id:     cm.Info.Id,
+		Id:     s.DeviceInfo.Id,
 	}
 
 	var body []byte
 
-	resp, err := http.Get(cm.Backend + "/api/device/" + strconv.Itoa(cm.Info.Id))
+	resp, err := http.Get(s.Backend + "/api/device/" + strconv.Itoa(s.DeviceInfo.Id))
 
 	if err != nil || resp.StatusCode != 200 {
 		log.Warn(fmt.Sprintf("failed to get Configuration from remote using local: %v", err))
@@ -120,7 +123,7 @@ func (cm *ConfigManager) GetConfig() error {
 		defer resp.Body.Close()
 	}
 
-	err = json.Unmarshal(body, cm.Config)
+	err = json.Unmarshal(body, s.Configuration)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal: %v", err)
 	}
@@ -128,65 +131,39 @@ func (cm *ConfigManager) GetConfig() error {
 	return nil
 }
 
-func (cm *ConfigManager) UpdateDeviceInfo(channels int) error {
-	ip, err := cm.getIp()
+func (s *Server) Register(channels int) error {
+
+	url := "http://" + core.Hosts.Backend + ":" + strconv.Itoa(core.Hosts.BackendPort) + "/api/register"
+	err := s.getPlatform()
 	if err != nil {
-		return fmt.Errorf("failed to update registration: %v", err)
+		return fmt.Errorf("failed to register: %v", err)
 	}
 
-	cm.Info.Channels = channels
-	cm.Info.Ip = ip
+	ip, err := s.getIp()
+	if err != nil {
+		return fmt.Errorf("failed to register: %v", err)
+	}
 
-	postBody, err := json.Marshal(cm.Info)
+	sn, err := s.getSN()
+	if err != nil {
+		return fmt.Errorf("failed to register: %v", err)
+	}
+
+	s.DeviceInfo = &DeviceInfo{
+		Sn:       sn,
+		Ip:       ip,
+		Owner:    "echo",
+		Channels: channels,
+	}
+
+	postBody, err := json.Marshal(s.DeviceInfo)
 	if err != nil {
 		return fmt.Errorf("failed to marshal register requets: %v", err)
 	}
 
-	body, err := cm.post(cm.Backend+"/api/registration/update", postBody)
-	if err != nil {
-		return fmt.Errorf("failed to update registration: %v", err)
-	}
-
-	response := &MessageResponse{}
-	err = json.Unmarshal(body, response)
-	if err != nil {
-		return fmt.Errorf("failed to update registration: %v", err)
-	}
-
-	log.V5(response.Msg)
-	return nil
-}
-
-func (cm *ConfigManager) Register() error {
-	err := cm.getPlatform()
-	if err != nil {
-		return fmt.Errorf("failed to register: %v", err)
-	}
-
-	ip, err := cm.getIp()
-	if err != nil {
-		return fmt.Errorf("failed to register: %v", err)
-	}
-
-	sn, err := cm.getSN()
-	if err != nil {
-		return fmt.Errorf("failed to register: %v", err)
-	}
-
-	cm.Info = &DeviceInfo{
-		Sn:    sn,
-		Ip:    ip,
-		Owner: "echo",
-	}
-
-	postBody, err := json.Marshal(cm.Info)
-	if err != nil {
-		return fmt.Errorf("failed to marshal register requets: %v", err)
-	}
-
-	log.V5(cm.Backend)
+	log.V5(url)
 	var body []byte
-	body, err = cm.post(cm.Backend+"/api/register", postBody)
+	body, err = s.post(url, postBody)
 	if err != nil {
 		log.Warn(fmt.Sprintf("failed to register device no connectivity, looking to saved info: %v", err))
 		body, err = ioutil.ReadFile(deviceInfoFile)
@@ -206,12 +183,12 @@ func (cm *ConfigManager) Register() error {
 		return fmt.Errorf("failed to unmarshal register response: %v", err)
 	}
 
-	cm.Info.Id = response.RegistrationId
+	s.DeviceInfo.Id = response.RegistrationId
 
 	return nil
 }
 
-func (cm *ConfigManager) post(url string, postBody []byte) ([]byte, error) {
+func (s *Server) post(url string, postBody []byte) ([]byte, error) {
 	respBody := bytes.NewBuffer(postBody)
 	resp, err := http.Post(url, "application/json", respBody)
 	if err != nil {
@@ -227,25 +204,25 @@ func (cm *ConfigManager) post(url string, postBody []byte) ([]byte, error) {
 	return body, nil
 }
 
-func (cm *ConfigManager) getPlatform() error {
+func (s *Server) getPlatform() error {
 	out, err := exec.Command("/bin/sh", "-c", "uname -m").Output()
 	if err != nil {
 		return fmt.Errorf("failed to identify platform: %v", err)
 	}
 	platform := strings.ReplaceAll(string(out), "\n", "")
 	if platform == "aarch64" || platform == "armv7l" {
-		cm.Platform = "pi"
+		s.Platform = "pi"
 	} else {
-		cm.Platform = "other"
+		s.Platform = "other"
 	}
-	log.V5(fmt.Sprintf("MY PLATFORM IS - %v", cm.Platform))
+	log.V5(fmt.Sprintf("MY PLATFORM IS - %v", s.Platform))
 	return nil
 }
 
-func (cm *ConfigManager) getSN() (string, error) {
+func (s *Server) getSN() (string, error) {
 	log.V5("GETTING SERIAL NUMBER")
 	var out *exec.Cmd
-	if cm.Platform == "pi" {
+	if s.Platform == "pi" {
 		out = exec.Command("/bin/sh", "-c", "sudo cat /proc/cpuinfo | grep Serial | cut -d ' ' -f 2")
 	} else {
 		out = exec.Command("/bin/sh", "-c", "sudo cat /sys/class/dmi/id/board_serial")
@@ -259,8 +236,8 @@ func (cm *ConfigManager) getSN() (string, error) {
 	return sn, nil
 }
 
-func (cm *ConfigManager) getIp() (*IP, error) {
-	if cm.Platform != "pi" {
+func (s *Server) getIp() (*IP, error) {
+	if s.Platform != "pi" {
 		return &IP{"127.0.0.1", "127.0.0.1"}, nil
 	}
 	conn, err := net.Dial("udp", "8.8.8.8:80")
@@ -288,4 +265,21 @@ func (cm *ConfigManager) getIp() (*IP, error) {
 		localAddr.IP.String(),
 		ipJson.Ip,
 	}, nil
+}
+
+func (s *Server) Handler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	response := "ok"
+	switch action := vars["action"]; action {
+	case "start":
+		go s.Channels.Start(s.Configuration.Fps, s.Configuration.Offset, s.Configuration.Id)
+		response = "starting..."
+	case "stop":
+		go s.Channels.Stop()
+		response = "stopping..."
+	}
+	_, err := w.Write([]byte(response))
+	if err != nil {
+		panic(err)
+	}
 }

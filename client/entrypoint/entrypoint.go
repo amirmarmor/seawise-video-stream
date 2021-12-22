@@ -1,16 +1,18 @@
 package entrypoint
 
 import (
+	"fmt"
 	"net/http"
-	"strings"
-	"www.seawise.com/client/capture"
+	"www.seawise.com/client/channels"
 	"www.seawise.com/client/core"
+	"www.seawise.com/client/server"
 	"www.seawise.com/common/log"
 )
 
 type EntryPoint struct {
-	manager *core.ConfigManager
-	capt    *capture.Capture
+	//manager  *core.ConfigManager
+	channels *channels.Channels
+	server   *server.Server
 }
 
 func (p *EntryPoint) Run() {
@@ -20,9 +22,13 @@ func (p *EntryPoint) Run() {
 	log.ParseFlags()
 	log.Info("Starting")
 
-	//p.buildBlocks()
-
+	p.buildBlocks()
+	//p.addHandlers()
 	cleanSigTerm := Produce()
+	err := http.ListenAndServe(":3000", p.server.Router)
+	if err != nil {
+		log.Fatal(fmt.Sprintf("Server down: %v", err))
+	}
 	//go p.capt.Start()
 
 	cleanSigTerm.WaitForTermination()
@@ -30,30 +36,17 @@ func (p *EntryPoint) Run() {
 
 func (p *EntryPoint) buildBlocks() {
 	var err error
-	p.manager, err = core.Produce()
+	//p.manager, err = core.Produce()
+	//if err != nil {
+	//	panic(err)
+	//}
+
+	p.channels, err = channels.Create(5)
 	if err != nil {
 		panic(err)
 	}
 
-	p.capt = capture.Create(p.manager, 5)
-	p.capt.Init()
-}
-
-func (p *EntryPoint) addHandlers() {
-	http.HandleFunc("/", p.handler)
-}
-
-func (p *EntryPoint) handler(w http.ResponseWriter, r *http.Request) {
-	response := "ok"
-	switch action := strings.TrimPrefix(r.URL.Path, "/"); action {
-	case "start":
-		go p.capt.Start()
-		response = "starting..."
-	case "stop":
-		//go p.capt.Stop()
-		response = "stopping..."
-	}
-	_, err := w.Write([]byte(response))
+	p.server, err = server.Produce(p.channels)
 	if err != nil {
 		panic(err)
 	}
