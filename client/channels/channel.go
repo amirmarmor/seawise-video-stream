@@ -98,8 +98,6 @@ func (c *Channel) close() {
 		log.Warn(fmt.Sprintf("failed to close image: %v", err))
 	}
 
-	//c.streamer.Stop()
-
 	c.init = false
 	log.V5("stopped....")
 }
