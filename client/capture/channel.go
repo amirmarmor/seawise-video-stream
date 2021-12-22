@@ -40,10 +40,10 @@ type Recording struct {
 	startTime   time.Time
 }
 
-func CreateChannel(device int, channelName int, rules []core.Rule, fps int) *Channel {
+func CreateChannel(device int, count int, channelName int, rules []core.Rule, fps int) *Channel {
 	channel := &Channel{
 		name:    channelName,
-		port:    core.Hosts.StreamPort + (device * 10) + channelName,
+		port:    core.Hosts.StreamPort + (device * 10) + count,
 		Stream:  mjpeg.NewStream(),
 		Rules:   rules,
 		created: time.Now(),
@@ -114,6 +114,19 @@ func (c *Channel) Start() {
 	c.StopChannel <- "restarting"
 }
 
+func (c *Channel) getImage() error {
+	ok := c.cap.Read(&c.image)
+	if !ok {
+		return fmt.Errorf("read encountered channel closed %v\n", c.name)
+	}
+
+	if c.image.Empty() {
+		return fmt.Errorf("Empty Image")
+	}
+
+	return nil
+}
+
 func (c *Channel) Read() {
 	imageRecord := c.checkImageRules()
 	videoRecord := c.checkVideoRules()
@@ -126,19 +139,16 @@ func (c *Channel) Read() {
 		}
 	}
 
-	ok := c.cap.Read(&c.image)
-	if !ok {
-		log.Warn(fmt.Sprintf("read encountered channel closed %v\n", c.name))
-	}
-
-	if c.image.Empty() {
-		log.V5(fmt.Sprintf("Empty Image"))
-		return
-	}
-
 	if imageRecord {
 		now := time.Now()
 		saveFileName := c.path + "/" + now.Format("2006-01-02--15-04-05") + "-image.jpg"
+
+		err := c.getImage()
+		if err != nil {
+			log.Warn(fmt.Sprintf("failed to read image: %v", err))
+			return
+		}
+
 		ok := gocv.IMWrite(saveFileName, c.image)
 		if !ok {
 			log.Warn(fmt.Sprintf("failed to write image"))
@@ -146,14 +156,27 @@ func (c *Channel) Read() {
 	}
 
 	if videoRecord {
-		err := c.doRecord()
+		err := c.getImage()
+		if err != nil {
+			log.Warn(fmt.Sprintf("failed to read image: %v", err))
+			return
+		}
+
+		err = c.doRecord()
 		if err != nil {
 			log.Warn(fmt.Sprintf("fauled to record: %v", err))
 		}
 	}
 
-	c.Queue <- c.encodeImage()
-	gocv.WaitKey(1)
+	if true {
+		err := c.getImage()
+		if err != nil {
+			log.Warn(fmt.Sprintf("failed to read image: %v", err))
+			return
+		}
+		c.Queue <- c.encodeImage()
+		gocv.WaitKey(1)
+	}
 }
 
 //func (c *Channel) doStream() error {

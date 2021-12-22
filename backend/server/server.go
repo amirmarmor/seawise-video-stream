@@ -5,46 +5,41 @@ import (
 	"fmt"
 	"github.com/hybridgroup/mjpeg"
 	"net"
+	"net/http"
 	"sync"
 	"www.seawise.com/backend/core"
 	"www.seawise.com/common/log"
 )
 
 type Server struct {
-	Streams   []*Stream
-	Listeners []*Listener
-}
-
-type Stream struct{}
-type Listener struct {
 	TCPListener             net.Listener
 	TCPListenerMutex        sync.Mutex
 	Frame                   *bytes.Buffer
 	FrameMutex              sync.RWMutex
 	timeStampPacketSize     uint
 	contentLengthPacketSize uint
+	Stream                  *mjpeg.Stream
+	Port                    int
 }
 
-func Create(devices *core.Devices) (*Server, error) {
-	server := &Server{}
-
+func Create(devices *core.Devices) ([]*Server, error) {
+	servers := make([]*Server, 0)
 	for _, device := range devices.List {
 		for ch := 0; ch < device.Channels; ch++ {
 			port := core.Config.Port + (device.Id * 10) + ch
-			stream := mjpeg.NewStream()
-			listener, err := NewListener(port)
+			server, err := NewServer(port)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create listener - %v", err)
 			}
-			go listener.Run(stream)
-			server.Listeners = append(server.Listeners, listener)
+			//go server.Run()
+			servers = append(servers, server)
 		}
 	}
 
 	return servers, nil
 }
 
-func NewListener(port int) (*Listener, error) {
+func NewServer(port int) (*Server, error) {
 	tcpListener, err := net.ListenTCP("tcp", &net.TCPAddr{
 		IP:   net.ParseIP("127.0.0.1"),
 		Port: port,
@@ -56,32 +51,39 @@ func NewListener(port int) (*Listener, error) {
 
 	buf := new(bytes.Buffer)
 
-	server := &Listener{
+	server := &Server{
 		TCPListener:             tcpListener,
 		TCPListenerMutex:        sync.Mutex{},
 		Frame:                   buf,
 		FrameMutex:              sync.RWMutex{},
 		timeStampPacketSize:     8,
 		contentLengthPacketSize: 8,
+		Stream:                  mjpeg.NewStream(),
+		Port:                    port,
 	}
 	log.V5(fmt.Sprintf("Listening on 127.0.0.1:%v", port))
 	return server, nil
 }
 
-func (l *Listener) Run(stream *mjpeg.Stream) {
+func (s *Server) Run() {
 	defer func(tcpListener net.Listener) {
 		err := tcpListener.Close()
 		if err != nil {
 			panic(err)
 		}
-	}(l.TCPListener)
+	}(s.TCPListener)
 
-	go l.runListener()
+	go s.runListener()
 
 	//window := gocv.NewWindow("Streaming")
 	for {
-		l.FrameMutex.RLock()
-		stream.UpdateJPEG(l.Frame.Bytes())
-		l.FrameMutex.RUnlock()
+		s.FrameMutex.RLock()
+		s.Stream.UpdateJPEG(s.Frame.Bytes())
+		s.FrameMutex.RUnlock()
 	}
+}
+
+func (s *Server) HandleOutbound(w http.ResponseWriter, r *http.Request) {
+	log.V5("CONNN")
+	s.Stream.ServeHTTP(w, r)
 }

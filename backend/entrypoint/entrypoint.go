@@ -1,6 +1,8 @@
 package entrypoint
 
 import (
+	"net/http"
+	"strconv"
 	"www.seawise.com/backend/core"
 	"www.seawise.com/backend/server"
 	"www.seawise.com/common/log"
@@ -19,9 +21,12 @@ func (p *EntryPoint) Run() {
 	log.Info("Starting")
 
 	p.buildBlocks()
-
+	p.addHandlers()
 	cleanSigTerm := Produce()
-
+	err := http.ListenAndServe("127.0.0.1:8080", nil)
+	if err != nil {
+		panic(err)
+	}
 	cleanSigTerm.WaitForTermination()
 }
 
@@ -32,12 +37,15 @@ func (p *EntryPoint) buildBlocks() {
 		panic(err)
 	}
 
-	p.servers, err = server.CreateListener(p.devices)
+	p.servers, err = server.Create(p.devices)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func (p *EntryPoint) startListening() {
-
+func (p *EntryPoint) addHandlers() {
+	for _, s := range p.servers {
+		path := "/stream/" + strconv.Itoa(s.Port)
+		http.HandleFunc(path, s.HandleOutbound)
+	}
 }

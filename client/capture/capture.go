@@ -112,17 +112,19 @@ func (c *Capture) detectCameras() error {
 	log.V5(fmt.Sprintf("Done checking vid - %v", vids))
 
 	i := 0
+	count := 0
 	for i < c.attempts {
 		log.V5(fmt.Sprintf("Attempting to start channel - %v / %v", i, c.attempts))
 		c.Channels = make([]*Channel, 0)
 		for _, num := range vids {
 			if num >= c.manager.Config.Offset {
-				channel := CreateChannel(c.manager.Config.Id, num, c.rules, c.manager.Config.Fps)
+				channel := CreateChannel(c.manager.Config.Id, count, num, c.rules, c.manager.Config.Fps)
 				err := channel.Init()
 				if err != nil {
 					continue
 				} else {
 					c.Channels = append(c.Channels, channel)
+					count++
 				}
 			}
 		}
